@@ -167,7 +167,7 @@ export function buildPreviewDoc(files) {
       }
     });
 
-    // 5. Standard library shims (framer-motion, clsx, twMerge, cn)
+    // 5. Standard library shims (framer-motion, clsx, twMerge, cn, axios, uuid)
     window.motion = new Proxy({}, {
       get: (_, tag) => (props) => React.createElement(tag, props)
     });
@@ -175,6 +175,16 @@ export function buildPreviewDoc(files) {
     window.clsx = (...args) => args.flat().filter(Boolean).join(' ');
     window.cn = window.clsx;
     window.twMerge = window.clsx;
+    window.axios = {
+      get: async () => ({ data: [] }),
+      post: async (_, data) => ({ data }),
+      put: async (_, data) => ({ data }),
+      delete: async () => ({ data: { success: true } }),
+      create: () => window.axios
+    };
+    window.uuid = () => (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : Math.random().toString(36).substring(2, 9);
+    window.v4 = window.uuid;
+    window.confetti = () => {};
 
     const {
       Plus, Trash2, Edit, Edit2, Edit3, Trash, Check, X, Search, Filter,
@@ -184,10 +194,17 @@ export function buildPreviewDoc(files) {
       Mail, User, Settings, Bell, Download, Upload, Shield, CheckCircle,
       CheckCircle2, AlertCircle, HelpCircle, Info, Sparkles, Moon, Sun, Layers, Home,
       Save, Folder, Clock, Zap, Cpu, Server, Database, Activity, Star, Heart,
-      motion, AnimatePresence, clsx, cn
+      motion, AnimatePresence, clsx, cn, axios, uuid, v4, confetti
     } = window;
 
-    // Safe useContext shim: prevents fatal TypeError when context hook is called outside provider
+    // Safe createContext & useContext shims: guarantees destructuring never fails
+    const _origCreateContext = React.createContext;
+    if (_origCreateContext) {
+      React.createContext = function(defaultValue = {}) {
+        return _origCreateContext.call(React, defaultValue !== undefined ? defaultValue : {});
+      };
+    }
+
     const _origUseContext = React.useContext;
     React.useContext = function(context) {
       const result = _origUseContext.apply(this, arguments);
