@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Scale default UI proportion by 110% so it feels spacious and readable at 100% browser zoom */
+  html {
+    font-size: 17.6px; /* 16px * 1.1 = 17.6px (110% baseline scale) */
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+  
+  /* Sleek Dark Scrollbar */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #090a0d;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #27272a;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #3f3f46;
+  }
+}
+
+@keyframes scanline {
+  0% {
+    top: -20%;
+  }
+  100% {
+    top: 110%;
+  }
+}
+
+.animate-scanline {
+  animation: scanline 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* ========================================================
+   CLERK AUTHENTICATION HIGH-CONTRAST DARK THEME OVERRIDES
+   ======================================================== */
+
+/* UserButton Popover Card */
+.cl-userButtonPopoverCard {
+  background-color: #0d0f14 !important;
+  border: 1px solid #27272a !important;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* Primary User Name */
+.cl-userPreviewMainIdentifier {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+/* Secondary User Email */
+.cl-userPreviewSecondaryIdentifier {
+  color: #a1a1aa !important;
+}
+
+/* Action Buttons (Manage account, Sign out) */
+.cl-userButtonPopoverActionButton {
+  color: #e4e4e7 !important;
+  border-radius: 6px !important;
+}
+
+.cl-userButtonPopoverActionButton:hover {
+  background-color: #27272a !important;
+  color: #ffffff !important;
+}
+
+.cl-userButtonPopoverActionButtonText {
+  color: #e4e4e7 !important;
+  font-weight: 500 !important;
+}
+
+.cl-userButtonPopoverActionButton:hover .cl-userButtonPopoverActionButtonText {
+  color: #ffffff !important;
+}
+
+.cl-userButtonPopoverActionButtonIcon {
+  color: #a1a1aa !important;
+}
+
+.cl-userButtonPopoverActionButton:hover .cl-userButtonPopoverActionButtonIcon {
+  color: #ffffff !important;
+}
+
+/* Clerk Modals & Cards */
+.cl-card,
+.cl-modalContent {
+  background-color: #0d0f14 !important;
+  border: 1px solid #27272a !important;
+  color: #f4f4f5 !important;
+}
+
+.cl-headerTitle {
+  color: #ffffff !important;
+}
+
+.cl-headerSubtitle,
+.cl-formFieldLabel,
+.cl-dividerText,
+.cl-footerActionText {
+  color: #a1a1aa !important;
+}
+
+.cl-formFieldInput {
+  background-color: #181b22 !important;
+  border-color: #27272a !important;
+  color: #ffffff !important;
+}
+
+.cl-formButtonPrimary {
+  background-color: #ffffff !important;
+  color: #090a0d !important;
+  font-weight: 600 !important;
+}
+
+.cl-footerActionLink {
+  color: #ffffff !important;
+}
+
