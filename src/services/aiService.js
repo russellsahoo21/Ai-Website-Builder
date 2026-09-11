@@ -193,7 +193,11 @@ async function fetchStream(apiKey, model, formattedMessages, signal) {
       ? apiKey
       : (import.meta.env.VITE_NVIDIA_API_KEY || '');
 
-    return fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    const nvidiaUrl = typeof window !== 'undefined'
+      ? '/api/nvidia/v1/chat/completions'
+      : 'https://integrate.api.nvidia.com/v1/chat/completions';
+
+    return fetch(nvidiaUrl, {
       method: 'POST',
       signal,
       headers: {
@@ -370,7 +374,11 @@ export async function testOpenRouterConnection(apiKey, model = DEFAULT_MODEL) {
       ? apiKey
       : (import.meta.env.VITE_NVIDIA_API_KEY || '');
 
-    const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+    const nvidiaUrl = typeof window !== 'undefined'
+      ? '/api/nvidia/v1/chat/completions'
+      : 'https://integrate.api.nvidia.com/v1/chat/completions';
+
+    const res = await fetch(nvidiaUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${nvidiaKey}`,
