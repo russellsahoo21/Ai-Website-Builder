@@ -396,6 +396,10 @@ export default function App() {
           onLaunchWithPrompt={handleLaunchWithPrompt}
           onOpenSettings={() => setIsSettingsOpen(true)}
           navigateTo={navigateTo}
+          apiKey={apiKey}
+          setApiKey={setApiKey}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
         />
 
         <SettingsModal

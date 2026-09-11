@@ -9,46 +9,91 @@ import {
   ExternalLink, 
   Clock, 
   Code2, 
-  Palette, 
   Globe, 
   Sparkles, 
   ArrowRight, 
-  LayoutDashboard,
-  Layers,
+  Layers, 
+  LayoutGrid, 
+  List, 
+  Edit2, 
+  Check, 
+  Zap, 
+  CheckCircle2, 
+  Share2, 
+  Settings, 
+  BookOpen, 
+  PanelLeftClose, 
+  PanelLeftOpen, 
+  Key, 
+  ShieldCheck, 
+  AlertTriangle, 
+  ChevronRight, 
+  Sliders,
+  Database,
+  Boxes,
+  Activity,
+  Cpu,
+  RefreshCw,
+  Terminal,
   FileCode,
-  LayoutGrid,
-  List,
-  Edit2,
-  Check,
-  Zap,
-  CheckCircle2,
-  Share2,
-  Settings,
-  BookOpen,
-  FolderOpen,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Key,
-  ShieldCheck,
-  AlertTriangle,
-  ChevronRight,
-  User,
-  LogOut,
-  Sliders
+  CheckCircle,
+  HelpCircle,
+  Info,
+  ChevronDown,
+  Layout,
+  Table,
+  CreditCard,
+  PieChart
 } from 'lucide-react';
-import { useUser, UserButton } from '@clerk/react';
+import { useUser } from '@clerk/react';
 import { formatTimeAgo } from '../services/projectService.js';
 import { downloadProjectZip } from '../utils/zipExporter.js';
 import { buildPreviewDoc } from '../utils/previewBuilder.js';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates.js';
+import { AVAILABLE_MODELS, testOpenRouterConnection } from '../services/aiService.js';
 
 export const MAX_FREE_PROJECTS = 5;
 
-const PROMPT_CHIPS = [
-  'Fintech Expense Tracker with Analytics',
-  'Luxury Architecture Studio & Gallery',
-  'SaaS Subscription & Analytics Dashboard',
-  'Artisanal Ceramic Store with Cart'
+const PROMPT_SUGGESTIONS = [
+  { label: 'Fintech Expense Tracker', prompt: 'Fintech Expense Tracker with analytics, CRUD transactions, category filters, and localStorage' },
+  { label: 'SaaS Billing & Team Dashboard', prompt: 'SaaS Subscription & Team Analytics dashboard with plan switcher, MRR charts, and members table' },
+  { label: 'Luxury Architectural Studio', prompt: 'Minimalist Architecture portfolio with project showcase, masonry gallery, and client inquiry form' },
+  { label: 'Artisanal Ceramic Store', prompt: 'E-commerce storefront with product grid, category tabs, slide-over shopping cart, and mock checkout' }
+];
+
+const MODULAR_COMPONENTS = [
+  {
+    id: 'stats-card',
+    name: 'Metric & KPI StatCard',
+    category: 'Metrics',
+    badge: 'React 18',
+    description: 'Compact KPI summary card with trend indicator, change percentage, and subtle gradient border.',
+    code: 'export function StatCard({ title, value, change, isPositive, icon: Icon }) {\n  return (\n    <div className="p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 flex items-center justify-between">\n      <div>\n        <p className="text-xs text-zinc-400 font-medium">{title}</p>\n        <p className="text-xl font-bold text-white mt-1">{value}</p>\n      </div>\n      {Icon && <div className="p-2.5 rounded-lg bg-zinc-800 text-zinc-300"><Icon className="w-5 h-5" /></div>}\n    </div>\n  );\n}'
+  },
+  {
+    id: 'data-table',
+    name: 'Interactive Data Table',
+    category: 'Data Display',
+    badge: 'Tailwind + State',
+    description: 'Tabular data display with search query filter, status badges, row selection, and action buttons.',
+    code: 'export function DataTable({ items = [] }) {\n  return (\n    <div className="w-full overflow-x-auto rounded-xl border border-zinc-800 bg-zinc-950">\n      <table className="w-full text-left text-xs text-zinc-300">\n        <tbody className="divide-y divide-zinc-800/60">\n          {items.map((row) => (\n            <tr key={row.id}><td className="px-4 py-3">{row.name}</td></tr>\n          ))}\n        </tbody>\n      </table>\n    </div>\n  );\n}'
+  },
+  {
+    id: 'filter-drawer',
+    name: 'Category Filter Bar',
+    category: 'Navigation',
+    badge: 'Hooks',
+    description: 'Filter bar with category tags selection, active status styling, and instant reset.',
+    code: 'export function FilterBar({ categories, activeCategory, onSelect, onReset }) {\n  return (\n    <div className="flex flex-wrap items-center gap-2 p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl">\n      {categories.map(c => <button key={c} onClick={() => onSelect(c)}>{c}</button>)}\n    </div>\n  );\n}'
+  },
+  {
+    id: 'auth-modal',
+    name: 'Action Modal Dialog',
+    category: 'Overlay',
+    badge: 'Portals / State',
+    description: 'Clean backdrop-blurred modal dialog with title, close trigger, and responsive action footer.',
+    code: 'export function ActionModal({ isOpen, onClose, title, children }) {\n  if (!isOpen) return null;\n  return (\n    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">\n      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-2xl p-6 shadow-2xl">\n        <h3>{title}</h3>\n        <div>{children}</div>\n      </div>\n    </div>\n  );\n}'
+  }
 ];
 
 export default function DashboardPage({
@@ -62,7 +107,11 @@ export default function DashboardPage({
   onLoadTemplate,
   onLaunchWithPrompt,
   onOpenSettings,
-  navigateTo
+  navigateTo,
+  apiKey = '',
+  setApiKey,
+  selectedModel = 'openrouter/free',
+  setSelectedModel
 }) {
   const { user, isLoaded } = useUser();
   const [searchQuery, setSearchQuery] = useState('');
@@ -72,7 +121,16 @@ export default function DashboardPage({
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [activeSidebarTab, setActiveSidebarTab] = useState('projects'); // 'projects' | 'templates'
+  
+  // Persistent Sidebar View State
+  const [activeSidebarTab, setActiveSidebarTab] = useState('projects'); 
+  // 'projects' | 'blueprints' | 'components' | 'storage' | 'deployments' | 'activity' | 'showcase' | 'settings' | 'docs'
+
+  // Settings State for inline settings view
+  const [tempKey, setTempKey] = useState(apiKey);
+  const [testingKey, setTestingKey] = useState(false);
+  const [testResult, setTestResult] = useState(null);
+  const [copiedComponentId, setCopiedComponentId] = useState(null);
 
   // Quota calculations
   const projectCount = projects.length;
@@ -155,210 +213,310 @@ export default function DashboardPage({
     setEditingId(null);
   };
 
+  const handleCopyCode = (comp) => {
+    navigator.clipboard.writeText(comp.code);
+    setCopiedComponentId(comp.id);
+    setTimeout(() => setCopiedComponentId(null), 2000);
+  };
+
+  const handleSaveInlineSettings = () => {
+    if (setApiKey) setApiKey(tempKey);
+    localStorage.setItem('aethercraft_openrouter_key', tempKey);
+    localStorage.setItem('aethercraft_model', selectedModel);
+    setTestResult({ success: true, msg: 'Settings successfully saved to local workspace.' });
+  };
+
+  const handleTestApiKey = async () => {
+    if (!tempKey) {
+      setTestResult({ success: false, msg: 'Enter an OpenRouter API key first' });
+      return;
+    }
+    setTestingKey(true);
+    setTestResult(null);
+    try {
+      await testOpenRouterConnection(tempKey, selectedModel);
+      setTestResult({ success: true, msg: 'Connection verified! Model ready for synthesis.' });
+    } catch (err) {
+      setTestResult({ success: false, msg: err.message || 'Connection failed' });
+    } finally {
+      setTestingKey(false);
+    }
+  };
+
   const displayName = isLoaded && user?.firstName ? user.firstName : 'Creator';
   const activeProject = projects.find(p => p.id === activeProjectId);
 
+  // Sidebar navigation structure
+  const sidebarNavGroups = [
+    {
+      group: 'WORKSPACE',
+      items: [
+        { id: 'projects', label: 'My Projects', icon: FolderKanban, badge: `${projectCount}/${MAX_FREE_PROJECTS}` },
+        { id: 'blueprints', label: 'Blueprints', icon: Layers, badge: `${STARTER_TEMPLATES.length}` },
+        { id: 'components', label: 'Component Library', icon: Boxes, badge: '4' },
+      ]
+    },
+    {
+      group: 'SYSTEM & DATA',
+      items: [
+        { id: 'storage', label: 'Storage & State', icon: Database },
+        { id: 'deployments', label: 'Deployments & ZIP', icon: Globe },
+        { id: 'activity', label: 'Activity Log', icon: Activity },
+        { id: 'showcase', label: 'Showcase', icon: Sparkles },
+      ]
+    },
+    {
+      group: 'CONFIGURATION',
+      items: [
+        { id: 'settings', label: 'Engine Settings', icon: Sliders },
+        { id: 'docs', label: 'Documentation', icon: BookOpen },
+      ]
+    }
+  ];
+
   return (
     <div className="w-screen h-screen flex bg-[#07090e] text-zinc-100 overflow-hidden font-sans select-none">
-      {/* ── Left Sidebar (Dashboard Navigation & Usage Tracker) ── */}
-      <aside className={`${
-        isSidebarCollapsed ? 'w-16' : 'w-64'
-      } bg-[#090b10] border-r border-zinc-800/80 flex flex-col justify-between transition-all duration-300 shrink-0 z-30`}>
-        {/* Sidebar Top: Logo & Workspace Switcher */}
-        <div>
-          <div className="h-14 border-b border-zinc-800/80 px-4 flex items-center justify-between">
+      {/* ── Left Sidebar (Permanent Across All Views) ── */}
+      <aside 
+        className={`${
+          isSidebarCollapsed ? 'w-16' : 'w-64'
+        } bg-[#090b10] border-r border-zinc-800/80 flex flex-col justify-between transition-all duration-200 shrink-0 z-30 relative`}
+      >
+        {/* Top Branding Section */}
+        <div className="flex flex-col flex-1 min-h-0">
+          <div className="h-14 border-b border-zinc-800/80 px-3 flex items-center justify-between shrink-0">
             {!isSidebarCollapsed ? (
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-zinc-100 flex items-center justify-center font-bold text-xs text-black shadow-md">
+              <div className="flex items-center gap-2.5 min-w-0">
+                {/* Logo Box - strict aspect-square & shrink-0 to prevent any squishing */}
+                <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center font-bold text-xs text-black shrink-0 aspect-square shadow-sm">
                   A
                 </div>
-                <div>
-                  <div className="font-bold text-xs tracking-tight text-white flex items-center gap-1.5">
+                <div className="min-w-0">
+                  <div className="font-bold text-xs tracking-tight text-white flex items-center gap-1.5 truncate">
                     <span>AetherCraft</span>
-                    <span className="px-1.5 py-0.2 rounded bg-cyan-950 text-[9px] text-cyan-400 font-mono border border-cyan-800/60">
+                    <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[9px] text-zinc-300 font-mono border border-zinc-700/80">
                       FREE
                     </span>
                   </div>
-                  <div className="text-[10px] text-zinc-500 truncate max-w-[120px]">
+                  <div className="text-[10px] text-zinc-500 truncate">
                     {displayName}'s Workspace
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="w-7 h-7 rounded-lg bg-zinc-100 flex items-center justify-center font-bold text-xs text-black mx-auto">
+              /* Centered crisp logo in collapsed mode */
+              <div 
+                onClick={() => setIsSidebarCollapsed(false)}
+                className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center font-bold text-xs text-black mx-auto shrink-0 aspect-square cursor-pointer hover:bg-white transition"
+                title="Expand Workspace Sidebar"
+              >
                 A
-              </div>
-            )}
-
-            <button
-              onClick={() => setIsSidebarCollapsed(prev => !prev)}
-              className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
-              title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
-            >
-              {isSidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
-            </button>
-          </div>
-
-          {/* Sidebar Nav Items */}
-          <div className="p-3 space-y-1">
-            <button
-              onClick={() => {
-                setActiveSidebarTab('projects');
-                setFilterType('all');
-              }}
-              className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition ${
-                activeSidebarTab === 'projects'
-                  ? 'bg-zinc-800 text-white font-semibold shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60'
-              }`}
-              title="All Projects"
-            >
-              <div className="flex items-center gap-2.5">
-                <FolderKanban className="w-4 h-4 text-cyan-400" />
-                {!isSidebarCollapsed && <span>My Projects</span>}
-              </div>
-              {!isSidebarCollapsed && (
-                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                  isAtProjectLimit 
-                    ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60' 
-                    : 'bg-zinc-900 text-zinc-400'
-                }`}>
-                  {projectCount}/{MAX_FREE_PROJECTS}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => navigateTo('templates')}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60 transition"
-              title="Starter Blueprints"
-            >
-              <div className="flex items-center gap-2.5">
-                <Layers className="w-4 h-4 text-purple-400" />
-                {!isSidebarCollapsed && <span>Blueprints</span>}
-              </div>
-              {!isSidebarCollapsed && (
-                <span className="text-[10px] text-zinc-600 font-mono">
-                  {STARTER_TEMPLATES.length}
-                </span>
-              )}
-            </button>
-
-            <button
-              onClick={() => navigateTo('showcase')}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60 transition"
-              title="Community Showcase"
-            >
-              <Sparkles className="w-4 h-4 text-amber-400" />
-              {!isSidebarCollapsed && <span>Showcase</span>}
-            </button>
-
-            <button
-              onClick={() => {
-                if (onOpenSettings) onOpenSettings();
-              }}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60 transition"
-              title="Studio Settings & API Keys"
-            >
-              <Settings className="w-4 h-4 text-zinc-400" />
-              {!isSidebarCollapsed && <span>Settings</span>}
-            </button>
-
-            <button
-              onClick={() => navigateTo('docs')}
-              className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/60 transition"
-              title="Documentation"
-            >
-              <BookOpen className="w-4 h-4 text-zinc-400" />
-              {!isSidebarCollapsed && <span>Docs</span>}
-            </button>
-          </div>
-        </div>
-
-        {/* Sidebar Bottom: Free Tier Quota Tracker & User Profile */}
-        <div className="p-3 border-t border-zinc-800/80 bg-[#07080d]">
-          {/* Project Usage Tracker Card */}
-          {!isSidebarCollapsed && (
-            <div className="p-3 rounded-xl bg-zinc-900/80 border border-zinc-800 mb-3 select-none">
-              <div className="flex items-center justify-between text-[11px] font-mono text-zinc-400 mb-1.5">
-                <span className="font-semibold text-zinc-300">Free Tier Usage</span>
-                <span className={isAtProjectLimit ? "text-amber-400 font-bold" : "text-cyan-400"}>
-                  {projectCount} / {MAX_FREE_PROJECTS}
-                </span>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-2">
-                <div 
-                  className={`h-full transition-all duration-500 ${
-                    isAtProjectLimit 
-                      ? 'bg-amber-400' 
-                      : quotaPercent > 60 
-                      ? 'bg-cyan-400' 
-                      : 'bg-emerald-400'
-                  }`}
-                  style={{ width: `${quotaPercent}%` }}
-                />
-              </div>
-
-              <div className="text-[10px] text-zinc-500 font-mono leading-tight">
-                {isAtProjectLimit ? (
-                  <span className="text-amber-400/90 flex items-center gap-1">
-                    <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                    <span>Max projects reached (5/5)</span>
-                  </span>
-                ) : (
-                  <span>{MAX_FREE_PROJECTS - projectCount} project slots available</span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* User Profile & Studio CTA */}
-          <div className="flex items-center justify-between gap-2">
-            {!isSidebarCollapsed ? (
-              <div className="flex items-center gap-2 min-w-0">
-                <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "w-7 h-7" } }} />
-                <div className="min-w-0">
-                  <div className="text-xs font-semibold text-zinc-200 truncate">{displayName}</div>
-                  <div className="text-[10px] text-zinc-500 font-mono truncate">Free Tier</div>
-                </div>
-              </div>
-            ) : (
-              <div className="mx-auto">
-                <UserButton afterSignOutUrl="/" appearance={{ elements: { avatarBox: "w-7 h-7" } }} />
               </div>
             )}
 
             {!isSidebarCollapsed && (
               <button
-                onClick={() => navigateTo('studio')}
-                className="p-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black transition shrink-0"
-                title="Launch Code Studio"
+                onClick={() => setIsSidebarCollapsed(true)}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/80 transition shrink-0"
+                title="Collapse Sidebar"
               >
-                <ArrowRight className="w-3.5 h-3.5" />
+                <PanelLeftClose className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Floating Expand Tab when collapsed */}
+          {isSidebarCollapsed && (
+            <button
+              onClick={() => setIsSidebarCollapsed(false)}
+              className="absolute -right-3 top-4 w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center shadow-lg z-40 transition"
+              title="Expand Sidebar"
+            >
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Quick Launch Studio Shortcut */}
+          <div className="p-2.5 shrink-0">
+            <button
+              onClick={() => navigateTo('studio')}
+              className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-800/90 text-zinc-100 hover:bg-zinc-700/80 hover:text-white border border-zinc-700/50 transition group ${
+                isSidebarCollapsed ? 'justify-center px-0' : ''
+              }`}
+              title="Launch Code Studio"
+            >
+              <Code2 className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform shrink-0" />
+              {!isSidebarCollapsed && (
+                <div className="flex items-center justify-between w-full min-w-0">
+                  <span className="truncate">Open Code Studio</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 group-hover:translate-x-0.5 transition-all shrink-0" />
+                </div>
+              )}
+            </button>
+          </div>
+
+          {/* Sidebar Nav Items Divided into Organized Sections */}
+          <div className="flex-1 overflow-y-auto px-2.5 py-1 space-y-4 min-h-0">
+            {sidebarNavGroups.map((grp) => (
+              <div key={grp.group}>
+                {!isSidebarCollapsed && (
+                  <div className="px-2 mb-1.5 text-[10px] font-mono tracking-wider text-zinc-500 font-semibold uppercase">
+                    {grp.group}
+                  </div>
+                )}
+                <div className="space-y-0.5">
+                  {grp.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeSidebarTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveSidebarTab(item.id)}
+                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition ${
+                          isActive
+                            ? 'bg-zinc-800 text-white font-semibold shadow-sm border border-zinc-700/60'
+                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/80 border border-transparent'
+                        } ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}
+                        title={item.label}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Icon className={`w-4 h-4 shrink-0 ${
+                            isActive ? 'text-zinc-100' : 'text-zinc-400'
+                          }`} />
+                          {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
+                        </div>
+                        {!isSidebarCollapsed && item.badge && (
+                          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono shrink-0 ${
+                            item.id === 'projects' && isAtProjectLimit
+                              ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60'
+                              : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/40'
+                          }`}>
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Sidebar Footer: Real Quota Tracker + User Profile */}
+        <div className="p-3 border-t border-zinc-800/80 bg-[#080a0e] shrink-0 space-y-3">
+          {/* Free Tier Project Quota */}
+          {!isSidebarCollapsed ? (
+            <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800/90">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="font-semibold text-zinc-300 text-[11px]">Free Tier Usage</span>
+                <span className={`font-mono text-[11px] font-bold ${
+                  isAtProjectLimit ? 'text-amber-400' : 'text-zinc-400'
+                }`}>
+                  {projectCount} / {MAX_FREE_PROJECTS}
+                </span>
+              </div>
+              <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden mb-1.5">
+                <div 
+                  className={`h-full rounded-full transition-all duration-500 ${
+                    isAtProjectLimit 
+                      ? 'bg-amber-500' 
+                      : 'bg-zinc-200'
+                  }`}
+                  style={{ width: `${quotaPercent}%` }}
+                />
+              </div>
+              <div className="text-[10px] text-zinc-500 flex items-center justify-between">
+                <span>{MAX_FREE_PROJECTS - projectCount} project slots available</span>
+                <button 
+                  onClick={() => setActiveSidebarTab('settings')}
+                  className="text-zinc-400 hover:text-white underline text-[10px]"
+                >
+                  Manage
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div 
+              className="w-full flex flex-col items-center justify-center p-1 cursor-pointer"
+              onClick={() => setIsSidebarCollapsed(false)}
+              title={`Project quota: ${projectCount}/${MAX_FREE_PROJECTS}`}
+            >
+              <span className="text-[10px] font-mono text-zinc-400 font-bold">{projectCount}/{MAX_FREE_PROJECTS}</span>
+              <div className="w-6 h-1 rounded-full bg-zinc-800 mt-1 overflow-hidden">
+                <div className="h-full bg-zinc-300" style={{ width: `${quotaPercent}%` }} />
+              </div>
+            </div>
+          )}
+
+          {/* User Profile Footer */}
+          <div className="flex items-center justify-between pt-1">
+            {!isSidebarCollapsed ? (
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white shrink-0 shadow">
+                  {user?.firstName ? user.firstName[0].toUpperCase() : 'U'}
+                </div>
+                <div className="min-w-0">
+                  <div className="text-xs font-semibold text-white truncate">
+                    {user?.fullName || displayName}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 truncate">
+                    Personal Plan
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white mx-auto shadow shrink-0">
+                {user?.firstName ? user.firstName[0].toUpperCase() : 'U'}
+              </div>
+            )}
+
+            {!isSidebarCollapsed && (
+              <button
+                onClick={() => setActiveSidebarTab('settings')}
+                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                title="Account Settings"
+              >
+                <Settings className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
         </div>
       </aside>
 
-      {/* ── Main Content Area ── */}
-      <main className="flex-1 flex flex-col h-screen overflow-y-auto">
+      {/* ── Main Content Area (Swaps based on activeSidebarTab with Persistent Sidebar) ── */}
+      <main className="flex-1 flex flex-col min-w-0 bg-[#07090e] overflow-hidden">
         {/* Top Header Bar */}
-        <header className="h-14 border-b border-zinc-800/80 px-6 flex items-center justify-between bg-[#080a0f]/90 backdrop-blur shrink-0 sticky top-0 z-20">
+        <header className="h-14 border-b border-zinc-800/80 px-6 flex items-center justify-between shrink-0 bg-[#080a0f]">
           <div className="flex items-center gap-3">
-            <h1 className="text-sm font-bold text-white tracking-tight">Dashboard Overview</h1>
-            <span className="text-zinc-600">•</span>
-            <span className="text-xs text-zinc-400 font-light">Workspace Management</span>
+            <div className="flex items-center gap-2 text-xs text-zinc-400 font-mono">
+              <span className="text-zinc-200 font-semibold uppercase tracking-wider">
+                {activeSidebarTab === 'projects' && 'Projects & Apps'}
+                {activeSidebarTab === 'blueprints' && 'Starter Blueprints'}
+                {activeSidebarTab === 'components' && 'Modular UI Components'}
+                {activeSidebarTab === 'storage' && 'Storage & State'}
+                {activeSidebarTab === 'deployments' && 'Deployments & Production'}
+                {activeSidebarTab === 'activity' && 'Workspace Activity Log'}
+                {activeSidebarTab === 'showcase' && 'Community Showcase'}
+                {activeSidebarTab === 'settings' && 'Engine & API Settings'}
+                {activeSidebarTab === 'docs' && 'Developer Documentation'}
+              </span>
+              <span className="text-zinc-600">/</span>
+              <span className="text-zinc-500">
+                {activeSidebarTab === 'projects' ? `${projects.length} Total` : 'Workspace Management'}
+              </span>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
             <button
               onClick={handleCreateProjectSafe}
               disabled={isAtProjectLimit}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 disabled:opacity-40 text-black font-semibold text-xs transition shadow-sm"
-              title={isAtProjectLimit ? "Limit reached (5/5)" : "Create a new project"}
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+                isAtProjectLimit
+                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/40'
+                  : 'bg-zinc-100 hover:bg-white text-zinc-950 shadow-sm active:scale-95'
+              }`}
             >
               <Plus className="w-3.5 h-3.5" />
               <span>New Project</span>
@@ -366,538 +524,822 @@ export default function DashboardPage({
 
             <button
               onClick={() => navigateTo('studio')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white border border-zinc-800 text-xs font-medium transition"
+              className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800/80 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition"
             >
-              <span>Code Studio</span>
-              <ArrowRight className="w-3 h-3" />
+              <Code2 className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Studio</span>
             </button>
           </div>
         </header>
 
-        {/* Dashboard Main Scrollable Body */}
-        <div className="p-6 md:p-8 max-w-6xl w-full mx-auto space-y-8">
-          {/* ── Hero Welcome & Synthesizer Prompt Box ── */}
-          <div className="p-6 rounded-2xl bg-gradient-to-br from-[#0c0f17] via-[#090b10] to-[#0d111a] border border-zinc-800/80 shadow-2xl relative overflow-hidden">
-            <div className="relative z-10">
-              <div className="flex items-center justify-between mb-3">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-cyan-500/30 bg-cyan-500/10 text-cyan-300 text-xs font-semibold font-mono">
-                  <Sparkles className="w-3.5 h-3.5" />
-                  <span>AI SOFTWARE SYNTHESIZER</span>
-                </div>
-
-                <span className="text-[11px] font-mono text-zinc-500 hidden sm:inline">
-                  React 18 • Tailwind CSS • Lucide Icons
-                </span>
-              </div>
-
-              <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-white mb-2">
-                What do you want to build today?
-              </h2>
-              <p className="text-xs text-zinc-400 font-light mb-5 max-w-2xl">
-                Type your requirements in plain English. AetherCraft generates complete, modular full-stack React applications with state management and persistent storage.
-              </p>
-
-              {/* Prompt Input Form */}
-              <form onSubmit={handleQuickPromptSubmit} className="relative flex flex-col sm:flex-row gap-2 mb-4">
-                <input
-                  type="text"
-                  value={quickPrompt}
-                  onChange={(e) => setQuickPrompt(e.target.value)}
-                  placeholder="e.g. Build an expense tracker with income/expense filters, charts, and localStorage..."
-                  className="w-full px-4 py-3 bg-black/60 border border-zinc-700/80 rounded-xl text-xs font-mono text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-400 transition"
-                />
-                <button
-                  type="submit"
-                  disabled={!quickPrompt.trim() || isAtProjectLimit}
-                  className="w-full sm:w-auto px-5 py-3 rounded-xl bg-cyan-400 hover:bg-cyan-300 disabled:opacity-40 text-black font-semibold text-xs tracking-tight transition flex items-center justify-center gap-2 shrink-0 shadow-lg shadow-cyan-950/30"
-                >
-                  <span>Synthesize</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </form>
-
-              {/* Suggested Prompt Chips */}
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-mono uppercase text-zinc-500">Inspirations:</span>
-                {PROMPT_CHIPS.map((chip, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setQuickPrompt(chip)}
-                    className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 hover:text-white transition truncate max-w-[240px]"
-                  >
-                    • {chip}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* ── Relevant Workspace Stats Cards ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Stat 1: Free Tier Quota (Real, High-Value) */}
-            <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-zinc-400 mb-2">
-                <span className="text-xs font-mono uppercase tracking-wider">Project Quota</span>
-                <FolderKanban className="w-4 h-4 text-cyan-400" />
-              </div>
-              <div>
-                <div className="text-2xl font-bold text-white flex items-baseline gap-1">
-                  <span>{projectCount}</span>
-                  <span className="text-xs font-mono text-zinc-500 font-normal">/ {MAX_FREE_PROJECTS} Free Max</span>
-                </div>
-                {/* Progress bar */}
-                <div className="w-full h-1 bg-zinc-800 rounded-full mt-2 overflow-hidden">
-                  <div 
-                    className={`h-full ${isAtProjectLimit ? 'bg-amber-400' : 'bg-cyan-400'}`} 
-                    style={{ width: `${quotaPercent}%` }} 
-                  />
-                </div>
-              </div>
-              <div className="text-[11px] text-zinc-500 font-mono mt-2">
-                {MAX_FREE_PROJECTS - projectCount} slots remaining
-              </div>
-            </div>
-
-            {/* Stat 2: Active Workspace */}
-            <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-zinc-400 mb-2">
-                <span className="text-xs font-mono uppercase tracking-wider">Active Workspace</span>
-                <Code2 className="w-4 h-4 text-emerald-400" />
-              </div>
-              <div className="text-sm font-semibold text-zinc-200 truncate mt-1">
-                {activeProject?.name || 'No active project'}
-              </div>
-              <button
-                onClick={() => navigateTo('studio')}
-                className="text-[11px] text-cyan-400 hover:text-cyan-300 font-mono mt-2 text-left flex items-center gap-1"
-              >
-                <span>Resume in Studio</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
-
-            {/* Stat 3: Total Files Generated */}
-            <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-zinc-400 mb-2">
-                <span className="text-xs font-mono uppercase tracking-wider">Components & Files</span>
-                <Layers className="w-4 h-4 text-purple-400" />
-              </div>
-              <div className="text-2xl font-bold text-white">{totalFilesCount}</div>
-              <div className="text-[11px] text-zinc-500 font-mono mt-1">Modular JSX, CSS, HTML</div>
-            </div>
-
-            {/* Stat 4: Fast Export */}
-            <div className="p-4 rounded-xl bg-zinc-900/40 border border-zinc-800 flex flex-col justify-between">
-              <div className="flex items-center justify-between text-zinc-400 mb-2">
-                <span className="text-xs font-mono uppercase tracking-wider">Production Export</span>
-                <Download className="w-4 h-4 text-amber-400" />
-              </div>
-              <div className="text-sm font-semibold text-zinc-200">Instant ZIP Package</div>
-              <div className="text-[11px] text-zinc-500 font-mono mt-1">Zero build setup required</div>
-            </div>
-          </div>
-
-          {/* ── Project Library Section ── */}
-          <div>
-            {/* Filter Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setFilterType('all')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                    filterType === 'all'
-                      ? 'bg-zinc-800 text-white font-semibold'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  All Projects ({projects.length})
-                </button>
-                <button
-                  onClick={() => setFilterType('recent')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                    filterType === 'recent'
-                      ? 'bg-zinc-800 text-white font-semibold'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  Recently Updated
-                </button>
-                <button
-                  onClick={() => setFilterType('modular')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                    filterType === 'modular'
-                      ? 'bg-zinc-800 text-white font-semibold'
-                      : 'text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  Modular Components
-                </button>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {/* Search */}
-                <div className="relative">
-                  <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search projects..."
-                    className="pl-9 pr-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-700 transition w-44 sm:w-60"
-                  />
-                </div>
-
-                {/* View Mode Toggle */}
-                <div className="flex p-0.5 rounded-lg bg-zinc-900 border border-zinc-800">
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`p-1.5 rounded-md transition ${viewMode === 'grid' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
-                    title="Grid View"
-                  >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-1.5 rounded-md transition ${viewMode === 'list' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
-                    title="List View"
-                  >
-                    <List className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Quota Limit Warning Alert if 5/5 reached */}
-            {isAtProjectLimit && (
-              <div className="p-4 rounded-xl bg-amber-950/40 border border-amber-800/60 mb-6 flex items-center justify-between text-xs text-amber-200 font-mono">
-                <div className="flex items-center gap-2.5">
-                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>
-                    You have reached the free tier limit of <strong>5 projects</strong>. To create or synthesize a new project, please export or delete an existing one.
+        {/* Dynamic Content View Router */}
+        <div className="flex-1 overflow-y-auto min-h-0">
+          {/* TAB 1: MY PROJECTS */}
+          {activeSidebarTab === 'projects' && (
+            <div className="p-6 max-w-7xl mx-auto space-y-6">
+              {/* Sleek Synthesis Command Bar (Replaced AI Slop Hero) */}
+              <div className="rounded-2xl bg-[#0d1017] border border-zinc-800/90 p-5 relative overflow-hidden">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <Terminal className="w-4 h-4 text-zinc-400" />
+                    <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+                      Fast Synthesizer
+                    </span>
+                    <span className="text-[10px] text-zinc-500 font-mono">
+                      React 18 • Tailwind CSS • Lucide Icons
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-400 font-mono">
+                    Model: <span className="text-zinc-200 font-semibold">{selectedModel}</span>
                   </span>
                 </div>
-              </div>
-            )}
 
-            {/* Project Cards Grid / List */}
-            {filteredProjects.length === 0 ? (
-              <div className="rounded-2xl border border-zinc-800/80 bg-zinc-900/20 p-16 text-center flex flex-col items-center justify-center">
-                <div className="w-16 h-16 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center text-zinc-600 mb-4 shadow-inner">
-                  <FolderKanban className="w-8 h-8" />
+                <form onSubmit={handleQuickPromptSubmit} className="space-y-3">
+                  <div className="relative flex items-center">
+                    <input
+                      type="text"
+                      value={quickPrompt}
+                      onChange={(e) => setQuickPrompt(e.target.value)}
+                      placeholder="Describe what to generate (e.g. Minimalist crypto portfolio with price alert drawer and sparkline chart)..."
+                      className="w-full h-12 bg-zinc-950/80 border border-zinc-800 rounded-xl px-4 pr-32 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition font-sans"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!quickPrompt.trim() || isAtProjectLimit}
+                      className={`absolute right-1.5 px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition ${
+                        !quickPrompt.trim() || isAtProjectLimit
+                          ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed'
+                          : 'bg-zinc-100 hover:bg-white text-zinc-950 shadow-md active:scale-95'
+                      }`}
+                    >
+                      <Zap className="w-3.5 h-3.5 text-zinc-950" />
+                      <span>Synthesize</span>
+                    </button>
+                  </div>
+
+                  {/* Prompt Preset Chips */}
+                  <div className="flex items-center gap-2 flex-wrap pt-1">
+                    <span className="text-[11px] text-zinc-500 font-mono">Presets:</span>
+                    {PROMPT_SUGGESTIONS.map((item) => (
+                      <button
+                        key={item.label}
+                        type="button"
+                        onClick={() => setQuickPrompt(item.prompt)}
+                        className="px-2.5 py-1 rounded-lg text-[11px] bg-zinc-900/90 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800 border border-zinc-800/80 transition"
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </form>
+              </div>
+
+              {/* Developer Telemetry & Quota Strip */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                <div className="p-4 rounded-xl bg-[#0c0e14] border border-zinc-800/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-zinc-400 font-medium">Project Quota</span>
+                    <FolderKanban className="w-4 h-4 text-zinc-500" />
+                  </div>
+                  <div className="text-xl font-bold text-white font-mono">
+                    {projectCount} <span className="text-xs text-zinc-500 font-normal">/ {MAX_FREE_PROJECTS} Max</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-zinc-800 mt-2.5 overflow-hidden">
+                    <div className="h-full bg-zinc-300 rounded-full" style={{ width: `${quotaPercent}%` }} />
+                  </div>
                 </div>
-                <h3 className="text-base font-semibold text-zinc-200 mb-1">
-                  {searchQuery ? 'No matching projects found' : 'No projects created yet'}
-                </h3>
-                <p className="text-xs text-zinc-500 max-w-sm mb-6 font-light">
-                  {searchQuery 
-                    ? 'Try searching with different terms or clear filters.' 
-                    : 'Use the synthesizer box above or launch a blank studio workspace.'}
-                </p>
-                <button
-                  onClick={handleCreateProjectSafe}
-                  disabled={isAtProjectLimit}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 disabled:opacity-40 text-black font-semibold text-xs transition"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Create Project</span>
-                </button>
+
+                <div className="p-4 rounded-xl bg-[#0c0e14] border border-zinc-800/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-zinc-400 font-medium">Active Workspace</span>
+                    <Code2 className="w-4 h-4 text-zinc-500" />
+                  </div>
+                  <div className="text-sm font-semibold text-zinc-100 truncate">
+                    {activeProject ? activeProject.name : 'No Project Active'}
+                  </div>
+                  <button 
+                    onClick={() => navigateTo('studio')}
+                    className="text-xs text-cyan-400 hover:underline flex items-center gap-1 mt-2 font-medium"
+                  >
+                    <span>Resume in Studio</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#0c0e14] border border-zinc-800/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-zinc-400 font-medium">Total Files</span>
+                    <FileCode className="w-4 h-4 text-zinc-500" />
+                  </div>
+                  <div className="text-xl font-bold text-white font-mono">
+                    {totalFilesCount} <span className="text-xs text-zinc-500 font-normal">JSX, CSS, HTML</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-2">Compiled across workspace</p>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#0c0e14] border border-zinc-800/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-zinc-400 font-medium">Production Export</span>
+                    <Download className="w-4 h-4 text-zinc-500" />
+                  </div>
+                  <div className="text-sm font-semibold text-zinc-100">
+                    Zero Setup ZIP
+                  </div>
+                  <p className="text-[11px] text-zinc-500 mt-2">Self-contained Vite bundle</p>
+                </div>
               </div>
-            ) : viewMode === 'grid' ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredProjects.map((project) => {
-                  const isActive = activeProjectId === project.id;
-                  const fileList = Object.keys(project.files || {});
-                  const hasModular = fileList.some(f => f.includes('/'));
 
-                  return (
-                    <div
-                      key={project.id}
-                      onClick={() => onSelectProject(project)}
-                      className={`group rounded-2xl p-5 border transition-all duration-200 cursor-pointer flex flex-col justify-between hover:shadow-2xl ${
-                        isActive
-                          ? 'bg-zinc-900/90 border-cyan-500/70 shadow-lg shadow-cyan-950/20'
-                          : 'bg-[#0d0f15]/80 hover:bg-zinc-900/70 border-zinc-800/80 hover:border-zinc-700'
-                      }`}
+              {/* Projects Library Filter Header */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pt-2">
+                <div className="flex items-center gap-1.5 bg-zinc-900/60 p-1 rounded-xl border border-zinc-800/80">
+                  <button
+                    onClick={() => setFilterType('all')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                      filterType === 'all'
+                        ? 'bg-zinc-800 text-white font-semibold'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    All Projects ({projects.length})
+                  </button>
+                  <button
+                    onClick={() => setFilterType('recent')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                      filterType === 'recent'
+                        ? 'bg-zinc-800 text-white font-semibold'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Recently Updated
+                  </button>
+                  <button
+                    onClick={() => setFilterType('modular')}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                      filterType === 'modular'
+                        ? 'bg-zinc-800 text-white font-semibold'
+                        : 'text-zinc-400 hover:text-zinc-200'
+                    }`}
+                  >
+                    Modular
+                  </button>
+                </div>
+
+                <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                  <div className="relative flex-1 sm:w-64">
+                    <Search className="w-3.5 h-3.5 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search projects..."
+                      className="w-full h-8 pl-8 pr-3 text-xs bg-zinc-900/60 border border-zinc-800 rounded-lg text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-zinc-600"
+                    />
+                  </div>
+
+                  <div className="flex items-center bg-zinc-900/60 border border-zinc-800 rounded-lg p-0.5">
+                    <button
+                      onClick={() => setViewMode('grid')}
+                      className={`p-1.5 rounded ${viewMode === 'grid' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                      title="Grid View"
                     >
-                      <div>
-                        {/* Top: Icon + Title + Active Pill */}
-                        <div className="flex items-start justify-between gap-3 mb-3">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border ${
-                              isActive
-                                ? 'bg-cyan-950/80 border-cyan-700 text-cyan-400'
-                                : 'bg-zinc-800/80 border-zinc-700 text-zinc-400'
-                            }`}>
-                              <Code2 className="w-4 h-4" />
-                            </div>
+                      <LayoutGrid className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode('list')}
+                      className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-zinc-300'}`}
+                      title="List View"
+                    >
+                      <List className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
 
-                            <div className="min-w-0">
-                              {editingId === project.id ? (
-                                <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                  <input
-                                    type="text"
-                                    value={editingName}
-                                    onChange={(e) => setEditingName(e.target.value)}
-                                    className="px-2 py-0.5 bg-black border border-cyan-400 rounded text-xs font-semibold text-white focus:outline-none"
-                                    autoFocus
-                                  />
-                                  <button
-                                    onClick={(e) => handleSaveRename(project, e)}
-                                    className="p-1 rounded bg-cyan-500 text-black hover:bg-cyan-400"
-                                  >
-                                    <Check className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              ) : (
-                                <div className="flex items-center gap-1.5 group/title">
-                                  <h3 className="text-sm font-bold text-white group-hover:text-cyan-300 transition truncate">
-                                    {project.name}
-                                  </h3>
-                                  <button
-                                    onClick={(e) => handleStartRename(project, e)}
-                                    className="opacity-0 group-hover/title:opacity-100 p-0.5 text-zinc-500 hover:text-zinc-200"
-                                    title="Rename project"
-                                  >
-                                    <Edit2 className="w-2.5 h-2.5" />
-                                  </button>
-                                </div>
-                              )}
-                              <div className="flex items-center gap-2 text-[10px] font-mono text-zinc-500 mt-0.5">
-                                <span>{formatTimeAgo(project.updatedAt)}</span>
-                                <span>•</span>
-                                <span>{fileList.length} {fileList.length === 1 ? 'file' : 'files'}</span>
+              {/* Projects Grid / List Display */}
+              {filteredProjects.length === 0 ? (
+                <div className="py-16 text-center rounded-2xl border border-dashed border-zinc-800/80 bg-zinc-950/40">
+                  <FolderKanban className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                  <h4 className="text-sm font-semibold text-white">No projects found</h4>
+                  <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
+                    {searchQuery ? 'No projects match your search query.' : 'Create your first project or launch a starter blueprint.'}
+                  </p>
+                  <button
+                    onClick={handleCreateProjectSafe}
+                    disabled={isAtProjectLimit}
+                    className="mt-4 px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-100 text-black hover:bg-white transition"
+                  >
+                    + Create Project
+                  </button>
+                </div>
+              ) : viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-12">
+                  {filteredProjects.map((project) => {
+                    const isActive = project.id === activeProjectId;
+                    const fileCount = Object.keys(project.files || {}).length;
+                    const isEditing = editingId === project.id;
+
+                    return (
+                      <div
+                        key={project.id}
+                        onClick={() => onSelectProject(project)}
+                        className={`group rounded-xl border p-4 transition-all duration-200 cursor-pointer flex flex-col justify-between ${
+                          isActive
+                            ? 'bg-[#0f121a] border-cyan-700/50 shadow-md'
+                            : 'bg-[#0b0d13] border-zinc-800/80 hover:border-zinc-700 hover:bg-[#0e1017]'
+                        }`}
+                      >
+                        <div>
+                          <div className="flex items-center justify-between gap-2 mb-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-7 h-7 rounded-lg bg-zinc-800/90 flex items-center justify-center text-zinc-300 shrink-0 border border-zinc-700/50">
+                                <Code2 className="w-3.5 h-3.5" />
                               </div>
+                              {isEditing ? (
+                                <input
+                                  type="text"
+                                  value={editingName}
+                                  onChange={(e) => setEditingName(e.target.value)}
+                                  onBlur={(e) => handleSaveRename(project, e)}
+                                  onKeyDown={(e) => e.key === 'Enter' && handleSaveRename(project, e)}
+                                  autoFocus
+                                  onClick={(e) => e.stopPropagation()}
+                                  className="text-xs font-semibold bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-white focus:outline-none"
+                                />
+                              ) : (
+                                <span className="text-xs font-semibold text-white truncate group-hover:text-cyan-300 transition">
+                                  {project.name}
+                                </span>
+                              )}
                             </div>
-                          </div>
 
-                          {isActive && (
-                            <span className="px-2 py-0.5 rounded-full bg-cyan-950 border border-cyan-800 text-[10px] font-mono text-cyan-400 font-medium shrink-0">
-                              Active
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Prompt Description */}
-                        <p className="text-xs text-zinc-400 line-clamp-2 mb-4 leading-relaxed font-light">
-                          {project.prompt || 'Custom synthesized fullstack React application.'}
-                        </p>
-
-                        {/* Component File Pills */}
-                        <div className="flex flex-wrap gap-1.5 mb-4">
-                          {fileList.slice(0, 4).map((fname, i) => (
-                            <span key={i} className="px-2 py-0.5 rounded bg-zinc-800/60 border border-zinc-700/60 text-[10px] font-mono text-zinc-300">
-                              {fname.split('/').pop()}
-                            </span>
-                          ))}
-                          {fileList.length > 4 && (
-                            <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-500">
-                              +{fileList.length - 4}
-                            </span>
-                          )}
-                          {hasModular && (
-                            <span className="px-2 py-0.5 rounded bg-purple-950/60 border border-purple-800/60 text-[10px] font-mono text-purple-300">
-                              Modular
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Bottom Actions */}
-                      <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={(e) => handleOpenPreviewTab(project, e)}
-                            className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
-                            title="Preview in Standalone Tab"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => handleExportZip(project, e)}
-                            className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
-                            title="Download ZIP Archive"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isAtProjectLimit) {
-                                alert(`Cannot duplicate: Free tier maximum is ${MAX_FREE_PROJECTS} projects.`);
-                                return;
-                              }
-                              onDuplicateProject(project.id);
-                            }}
-                            className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-400 hover:text-white transition"
-                            title="Duplicate Project"
-                          >
-                            <Copy className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.confirm(`Delete "${project.name}"?`)) {
-                                onDeleteProject(project.id);
-                              }
-                            }}
-                            className="p-1.5 rounded-md hover:bg-zinc-800 text-zinc-500 hover:text-rose-400 transition"
-                            title="Delete Project"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-
-                        <button
-                          onClick={() => onSelectProject(project)}
-                          className="flex items-center gap-1 px-3 py-1 rounded-lg bg-zinc-800 group-hover:bg-cyan-500 text-zinc-300 group-hover:text-black text-xs font-semibold transition"
-                        >
-                          <span>Open</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              /* List View */
-              <div className="space-y-2">
-                {filteredProjects.map((project) => {
-                  const isActive = activeProjectId === project.id;
-                  const fileList = Object.keys(project.files || {});
-
-                  return (
-                    <div
-                      key={project.id}
-                      onClick={() => onSelectProject(project)}
-                      className={`p-4 rounded-xl border transition-all duration-200 cursor-pointer flex items-center justify-between ${
-                        isActive
-                          ? 'bg-zinc-900 border-cyan-500/80 shadow-md'
-                          : 'bg-zinc-900/40 hover:bg-zinc-900/80 border-zinc-800 hover:border-zinc-700'
-                      }`}
-                    >
-                      <div className="flex items-center gap-4 min-w-0">
-                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 border ${
-                          isActive ? 'bg-cyan-950 border-cyan-700 text-cyan-400' : 'bg-zinc-800 border-zinc-700 text-zinc-400'
-                        }`}>
-                          <Code2 className="w-4 h-4" />
-                        </div>
-
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-xs font-bold text-white truncate">{project.name}</h3>
                             {isActive && (
-                              <span className="px-1.5 py-0.2 rounded-full bg-cyan-950 text-[9px] font-mono text-cyan-400">
+                              <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-cyan-950/80 text-cyan-400 border border-cyan-800/60 shrink-0">
                                 Active
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] text-zinc-400 truncate max-w-md">{project.prompt}</p>
+
+                          <p className="text-[11px] text-zinc-400 line-clamp-2 mb-3 min-h-[32px]">
+                            {project.prompt || 'Synthesized React 18 Application with modular architecture.'}
+                          </p>
+                        </div>
+
+                        <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between text-[11px] text-zinc-500">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono">{fileCount} {fileCount === 1 ? 'file' : 'files'}</span>
+                            <span>•</span>
+                            <span>{formatTimeAgo(project.updatedAt)}</span>
+                          </div>
+
+                          <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
+                            <button
+                              onClick={(e) => handleStartRename(project, e)}
+                              className="p-1 rounded hover:bg-zinc-800 hover:text-zinc-200"
+                              title="Rename Project"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => handleOpenPreviewTab(project, e)}
+                              className="p-1 rounded hover:bg-zinc-800 hover:text-zinc-200"
+                              title="Open Standalone Preview"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => handleExportZip(project, e)}
+                              className="p-1 rounded hover:bg-zinc-800 hover:text-zinc-200"
+                              title="Export Project ZIP"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDuplicateProject(project.id);
+                              }}
+                              className="p-1 rounded hover:bg-zinc-800 hover:text-zinc-200"
+                              title="Duplicate Project"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete "${project.name}"?`)) {
+                                  onDeleteProject(project.id);
+                                }
+                              }}
+                              className="p-1 rounded hover:bg-rose-950/60 hover:text-rose-400"
+                              title="Delete Project"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                /* List View */
+                <div className="rounded-xl border border-zinc-800/80 bg-[#090b10] divide-y divide-zinc-800/60 pb-12 overflow-hidden">
+                  {filteredProjects.map((project) => {
+                    const isActive = project.id === activeProjectId;
+                    const fileCount = Object.keys(project.files || {}).length;
 
-                      <div className="flex items-center gap-5 shrink-0">
-                        <span className="text-[11px] font-mono text-zinc-500 hidden sm:inline">
-                          {formatTimeAgo(project.updatedAt)}
-                        </span>
-                        <span className="text-[11px] font-mono text-zinc-400 hidden sm:inline">
-                          {fileList.length} files
-                        </span>
+                    return (
+                      <div
+                        key={project.id}
+                        onClick={() => onSelectProject(project)}
+                        className={`px-4 py-3 flex items-center justify-between hover:bg-zinc-900/60 cursor-pointer transition ${
+                          isActive ? 'bg-zinc-900/40' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <Code2 className="w-4 h-4 text-zinc-400 shrink-0" />
+                          <div className="min-w-0">
+                            <div className="text-xs font-semibold text-white truncate flex items-center gap-2">
+                              <span>{project.name}</span>
+                              {isActive && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-cyan-950 text-cyan-400 border border-cyan-800">
+                                  Active
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-zinc-500 truncate max-w-md">
+                              {project.prompt || 'React 18 Application'}
+                            </div>
+                          </div>
+                        </div>
 
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={(e) => handleOpenPreviewTab(project, e)}
-                            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white"
-                            title="Preview"
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => handleExportZip(project, e)}
-                            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-400 hover:text-white"
-                            title="Download ZIP"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.confirm(`Delete "${project.name}"?`)) {
-                                onDeleteProject(project.id);
-                              }
-                            }}
-                            className="p-1.5 rounded hover:bg-zinc-800 text-zinc-500 hover:text-rose-400"
-                            title="Delete"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => onSelectProject(project)}
-                            className="ml-2 px-3 py-1 rounded bg-zinc-800 hover:bg-white text-zinc-200 hover:text-black text-xs font-semibold transition"
-                          >
-                            Open
-                          </button>
+                        <div className="flex items-center gap-4 text-xs text-zinc-500 shrink-0">
+                          <span className="font-mono text-[11px]">{fileCount} files</span>
+                          <span className="text-[11px]">{formatTimeAgo(project.updatedAt)}</span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => handleOpenPreviewTab(project, e)}
+                              className="p-1.5 rounded hover:bg-zinc-800 hover:text-white"
+                              title="Preview in Tab"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => handleExportZip(project, e)}
+                              className="p-1.5 rounded hover:bg-zinc-800 hover:text-white"
+                              title="Export ZIP"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Delete "${project.name}"?`)) {
+                                  onDeleteProject(project.id);
+                                }
+                              }}
+                              className="p-1.5 rounded hover:bg-rose-950/60 hover:text-rose-400"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* ── Starter Blueprints Shelf ── */}
-          <div className="pt-8 border-t border-zinc-800/80">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-base font-bold text-white tracking-tight">Starter Blueprints</h3>
-                <p className="text-xs text-zinc-500 font-light">Clone fully-functional client-side React 18 applications.</p>
-              </div>
-              <button
-                onClick={() => navigateTo('templates')}
-                className="text-xs font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
-              >
-                <span>View all templates</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
+          )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {STARTER_TEMPLATES.slice(0, 3).map((tmpl) => (
-                <div
-                  key={tmpl.id}
-                  onClick={() => onLoadTemplate(tmpl)}
-                  className="p-4 rounded-xl bg-zinc-900/30 hover:bg-zinc-900/70 border border-zinc-800 hover:border-zinc-700 transition cursor-pointer flex flex-col justify-between group"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-zinc-400">
-                        {tmpl.category}
-                      </span>
-                      <span className="text-[10px] font-mono text-zinc-500">
-                        {Object.keys(tmpl.files).length} files
-                      </span>
-                    </div>
-                    <h4 className="text-xs font-semibold text-zinc-200 group-hover:text-white mb-1">
-                      {tmpl.name}
-                    </h4>
-                    <p className="text-[11px] text-zinc-500 line-clamp-2 mb-3">
-                      {tmpl.description}
-                    </p>
-                  </div>
+          {/* TAB 2: STARTER BLUEPRINTS */}
+          {activeSidebarTab === 'blueprints' && (
+            <div className="p-6 max-w-7xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-base font-bold text-white">Production Starter Blueprints</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Verified modular React 18 templates ready for instant launch in Studio.
+                </p>
+              </div>
 
-                  <button
-                    onClick={() => onLoadTemplate(tmpl)}
-                    className="w-full py-1.5 rounded-lg bg-zinc-800/60 group-hover:bg-zinc-800 text-zinc-300 group-hover:text-white text-xs font-medium transition flex items-center justify-center gap-1.5"
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-12">
+                {STARTER_TEMPLATES.map((tmpl) => (
+                  <div 
+                    key={tmpl.id}
+                    className="p-5 rounded-2xl bg-[#0a0d14] border border-zinc-800/80 hover:border-zinc-700 flex flex-col justify-between transition"
                   >
-                    <span>Clone Template</span>
-                    <ArrowRight className="w-3 h-3" />
+                    <div>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-2 py-0.5 rounded-md bg-zinc-900 text-[10px] font-mono text-zinc-300 border border-zinc-800">
+                          {tmpl.category}
+                        </span>
+                        <span className="text-[10px] text-zinc-500 font-mono">React 18</span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white mb-1.5">{tmpl.name}</h4>
+                      <p className="text-xs text-zinc-400 leading-relaxed mb-4">{tmpl.description}</p>
+                      <div className="flex flex-wrap gap-1.5 mb-4">
+                        {tmpl.tags?.map((t) => (
+                          <span key={t} className="px-2 py-0.5 rounded-md bg-zinc-900/80 text-[10px] text-zinc-400 border border-zinc-800/60">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="pt-3 border-t border-zinc-800/80 flex items-center justify-between">
+                      <button
+                        onClick={() => {
+                          const doc = buildPreviewDoc(tmpl.files || {});
+                          if (!doc) return;
+                          const blob = new Blob([doc], { type: 'text/html' });
+                          window.open(URL.createObjectURL(blob), '_blank');
+                        }}
+                        className="text-xs text-zinc-400 hover:text-white flex items-center gap-1"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>Preview</span>
+                      </button>
+
+                      <button
+                        onClick={() => onLoadTemplate(tmpl)}
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-white text-black hover:bg-zinc-200 transition flex items-center gap-1.5"
+                      >
+                        <span>Use Blueprint</span>
+                        <ArrowRight className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: COMPONENT LIBRARY */}
+          {activeSidebarTab === 'components' && (
+            <div className="p-6 max-w-7xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-base font-bold text-white">Modular UI Components</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Production components engineered for React 18 & Tailwind CSS. Copy clean JSX into your apps.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 pb-12">
+                {MODULAR_COMPONENTS.map((comp) => (
+                  <div key={comp.id} className="p-5 rounded-2xl bg-[#0b0e15] border border-zinc-800/90 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-white">{comp.name}</span>
+                        <span className="px-2 py-0.5 rounded bg-zinc-900 text-[10px] font-mono text-zinc-300 border border-zinc-800">
+                          {comp.badge}
+                        </span>
+                      </div>
+                      <p className="text-xs text-zinc-400 mb-3">{comp.description}</p>
+                      <pre className="p-3 rounded-xl bg-zinc-950 border border-zinc-800/80 font-mono text-[11px] text-zinc-300 overflow-x-auto max-h-48 mb-3">
+                        {comp.code}
+                      </pre>
+                    </div>
+                    <div className="flex items-center justify-end pt-2 border-t border-zinc-800/60">
+                      <button
+                        onClick={() => handleCopyCode(comp)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center gap-1.5 transition"
+                      >
+                        {copiedComponentId === comp.id ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Copied to Clipboard</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5" />
+                            <span>Copy JSX Code</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: STORAGE & STATE INSPECTOR */}
+          {activeSidebarTab === 'storage' && (
+            <div className="p-6 max-w-5xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-base font-bold text-white">Storage & State Inspector</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Inspect and manage local workspace state, project records, and cached browser keys.
+                </p>
+              </div>
+
+              <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">Local Workspace Storage</h4>
+                    <p className="text-xs text-zinc-400">Contains {projects.length} project models and active settings.</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      const data = JSON.stringify(projects, null, 2);
+                      const blob = new Blob([data], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `aethercraft_workspace_backup_${Date.now()}.json`;
+                      a.click();
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Export Workspace JSON</span>
                   </button>
                 </div>
-              ))}
+
+                <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-4 font-mono text-xs text-zinc-300">
+                  <div className="text-zinc-500 mb-2">// Current Projects JSON Schema</div>
+                  <pre className="max-h-72 overflow-y-auto">
+                    {JSON.stringify(projects.map(p => ({ id: p.id, name: p.name, filesCount: Object.keys(p.files || {}).length, updatedAt: p.updatedAt })), null, 2)}
+                  </pre>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* TAB 5: DEPLOYMENTS & EXPORTS */}
+          {activeSidebarTab === 'deployments' && (
+            <div className="p-6 max-w-5xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-base font-bold text-white">Deployments & Production Bundles</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Export standard Vite + React packages for deployment on Vercel, Netlify, or AWS.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 flex flex-col justify-between">
+                  <div>
+                    <Globe className="w-6 h-6 text-cyan-400 mb-3" />
+                    <h4 className="text-sm font-bold text-white">Instant ZIP Package</h4>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Generates a complete project directory with package.json, vite.config.js, index.html, Tailwind CSS, and all modular JSX components.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      if (activeProject) {
+                        handleExportZip(activeProject, { stopPropagation: () => {} });
+                      } else {
+                        alert('Select an active project first.');
+                      }
+                    }}
+                    className="mt-6 px-4 py-2 rounded-xl text-xs font-semibold bg-white text-black hover:bg-zinc-200 transition flex items-center justify-center gap-2"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>Download Active App ZIP</span>
+                  </button>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 flex flex-col justify-between">
+                  <div>
+                    <Code2 className="w-6 h-6 text-purple-400 mb-3" />
+                    <h4 className="text-sm font-bold text-white">One-Command Dev Server</h4>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Run locally with standard Node.js & npm:
+                    </p>
+                    <pre className="mt-3 p-3 rounded-lg bg-zinc-950 font-mono text-[11px] text-zinc-300 border border-zinc-800">
+                      unzip app.zip
+cd app
+npm install
+npm run dev
+                    </pre>
+                  </div>
+                  <div className="mt-4 text-[11px] text-zinc-500">
+                    Compatible with Node 18+, Vite 5+, React 18+.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: ACTIVITY LOG */}
+          {activeSidebarTab === 'activity' && (
+            <div className="p-6 max-w-4xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-base font-bold text-white">Workspace Activity Log</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Timestamped audit trail of app creations, blueprint imports, and exports.
+                </p>
+              </div>
+
+              <div className="rounded-2xl bg-[#0b0e15] border border-zinc-800/80 divide-y divide-zinc-800/60 p-4">
+                {projects.map((p, idx) => (
+                  <div key={p.id} className="py-3 flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-2 h-2 rounded-full bg-cyan-400" />
+                      <div>
+                        <span className="text-white font-medium">Updated "{p.name}"</span>
+                        <span className="text-zinc-500 ml-2 font-mono text-[10px]">
+                          {Object.keys(p.files || {}).length} files compiled
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-zinc-500 font-mono text-[11px]">
+                      {formatTimeAgo(p.updatedAt)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 7: SHOWCASE */}
+          {activeSidebarTab === 'showcase' && (
+            <div className="p-6 max-w-7xl mx-auto space-y-6">
+              <div>
+                <h3 className="text-base font-bold text-white">Community & Featured Showcase</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Curated applications created with AetherCraft React 18 synthesizer.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-12">
+                {STARTER_TEMPLATES.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-zinc-800/80 bg-[#0c0f16] p-5 flex flex-col justify-between">
+                    <div>
+                      <div className="text-xs font-mono text-zinc-500 uppercase mb-1">{item.category}</div>
+                      <h4 className="text-sm font-bold text-white mb-2">{item.name}</h4>
+                      <p className="text-xs text-zinc-400 mb-4">{item.tagline}</p>
+                    </div>
+                    <button
+                      onClick={() => onLoadTemplate(item)}
+                      className="w-full py-2 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-white transition flex items-center justify-center gap-1.5"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Fork into Workspace</span>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 8: ENGINE SETTINGS (INLINE DEVELOPER PANEL) */}
+          {activeSidebarTab === 'settings' && (
+            <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
+              <div>
+                <h3 className="text-base font-bold text-white">Engine Configuration & API Keys</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Configure your OpenRouter API key and preferred synthesis model.
+                </p>
+              </div>
+
+              {/* API Key Input */}
+              <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Key className="w-4 h-4 text-zinc-400" />
+                    <h4 className="text-xs font-bold text-white uppercase font-mono">OpenRouter API Key</h4>
+                  </div>
+                  <a
+                    href="https://openrouter.ai/keys"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-zinc-400 hover:text-white flex items-center gap-1 underline"
+                  >
+                    <span>Get Key</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="password"
+                    value={tempKey}
+                    onChange={(e) => setTempKey(e.target.value)}
+                    placeholder="sk-or-v1-..."
+                    className="flex-1 h-10 px-3 bg-zinc-950 border border-zinc-800 rounded-xl text-xs text-white font-mono placeholder-zinc-600 focus:outline-none focus:border-zinc-600"
+                  />
+                  <button
+                    onClick={handleTestApiKey}
+                    disabled={testingKey}
+                    className="px-4 h-10 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition flex items-center gap-1.5 shrink-0"
+                  >
+                    {testingKey ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                    <span>Test Connection</span>
+                  </button>
+                </div>
+
+                {testResult && (
+                  <div className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+                    testResult.success
+                      ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-800/60'
+                      : 'bg-rose-950/60 text-rose-300 border border-rose-800/60'
+                  }`}>
+                    {testResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
+                    <span>{testResult.msg}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Model Selector */}
+              <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 space-y-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <Cpu className="w-4 h-4 text-zinc-400" />
+                  <h4 className="text-xs font-bold text-white uppercase font-mono">Synthesis Engine Model</h4>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {AVAILABLE_MODELS.map((m) => {
+                    const isSelected = selectedModel === m.id;
+                    return (
+                      <div
+                        key={m.id}
+                        onClick={() => setSelectedModel(m.id)}
+                        className={`p-3 rounded-xl border cursor-pointer transition ${
+                          isSelected
+                            ? 'bg-zinc-800/90 border-white/60 shadow-sm'
+                            : 'bg-zinc-950/60 border-zinc-800/80 hover:border-zinc-700'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-white">{m.name}</span>
+                          {m.isFree ? (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800/60">
+                              FREE
+                            </span>
+                          ) : (
+                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700">
+                              PAID
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-zinc-400 font-mono">{m.badge}</p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Save Settings Button */}
+              <div className="flex justify-end">
+                <button
+                  onClick={handleSaveInlineSettings}
+                  className="px-6 py-2.5 rounded-xl text-xs font-semibold bg-white text-black hover:bg-zinc-200 transition shadow"
+                >
+                  Save Settings
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 9: DOCUMENTATION & ENGINE SPECS */}
+          {activeSidebarTab === 'docs' && (
+            <div className="p-6 max-w-4xl mx-auto space-y-6 pb-12">
+              <div>
+                <h3 className="text-base font-bold text-white">Developer Documentation & Architecture</h3>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Reference guide for the AetherCraft React 18 compilation engine and code conventions.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 space-y-2">
+                  <h4 className="text-xs font-bold text-white uppercase font-mono tracking-wider">
+                    1. React 18 Compilation Engine
+                  </h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    AetherCraft executes a real-time Babel standalone transform on generated JSX. All components are mounted inside an isolated sandbox iframe with full React 18 Concurrent features, StrictMode emulation, and Tailwind CSS 3.x CDN injection.
+                  </p>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 space-y-2">
+                  <h4 className="text-xs font-bold text-white uppercase font-mono tracking-wider">
+                    2. Lucide Icon Integration
+                  </h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    You can import any Lucide icon directly using standard ES module syntax:
+                  </p>
+                  <pre className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-300">
+                    import &#123; Plus, Trash2, Search, Filter &#125; from 'lucide-react';
+                  </pre>
+                </div>
+
+                <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 space-y-2">
+                  <h4 className="text-xs font-bold text-white uppercase font-mono tracking-wider">
+                    3. State & Persistence Pattern
+                  </h4>
+                  <p className="text-xs text-zinc-400 leading-relaxed">
+                    Always use safe lazy initialization for localStorage in your generated components:
+                  </p>
+                  <pre className="p-3 rounded-lg bg-zinc-950 border border-zinc-800 font-mono text-[11px] text-zinc-300">
+                    const [items, setItems] = useState(() =&gt; &#123;\n  try &#123;\n    const saved = localStorage.getItem('app_items');\n    return saved ? JSON.parse(saved) : DEFAULT_ITEMS;\n  &#125; catch &#123;\n    return DEFAULT_ITEMS;\n  &#125;\n&#125;);
+                  </pre>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </main>
     </div>
