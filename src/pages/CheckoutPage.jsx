@@ -44,9 +44,20 @@ const CHECKOUT_PLANS = {
 export default function CheckoutPage({ 
   initialPlanId = 'pro', 
   initialBillingCycle = 'annual',
+  returnRoute = 'landing',
   navigateTo 
 }) {
   const { user, isLoaded } = useUser();
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else if (navigateTo) {
+      navigateTo(returnRoute || 'landing');
+    } else {
+      window.location.hash = returnRoute === 'landing' ? '' : `/${returnRoute}`;
+    }
+  };
 
   // Plan & Billing cycle state
   const [selectedPlanId, setSelectedPlanId] = useState(() => {
@@ -320,12 +331,9 @@ export default function CheckoutPage({
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => {
-                if (navigateTo) navigateTo('pricing');
-                else window.location.hash = '/pricing';
-              }}
+              onClick={handleBack}
               className="p-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white border border-zinc-800 transition cursor-pointer"
-              title="Return to Pricing"
+              title="Go Back"
             >
               <ArrowLeft className="w-4 h-4" />
             </button>

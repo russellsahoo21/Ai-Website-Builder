@@ -48,6 +48,7 @@ export default function App() {
   const [currentRoute, setCurrentRoute] = useState(getRouteFromHash);
   const [checkoutPlan, setCheckoutPlan] = useState('pro');
   const [checkoutCycle, setCheckoutCycle] = useState('annual');
+  const [returnRoute, setReturnRoute] = useState('landing');
 
   // — Studio UI state —
   const [activeTab, setActiveTab] = useState('preview');
@@ -168,6 +169,9 @@ export default function App() {
     if ((route === 'studio' || route === 'dashboard') && !isSignedIn) { 
       clerk.openSignIn(); 
       return; 
+    }
+    if (route === 'checkout') {
+      setReturnRoute(currentRoute || 'landing');
     }
     if (params.plan) setCheckoutPlan(params.plan);
     if (params.cycle) setCheckoutCycle(params.cycle);
@@ -450,6 +454,7 @@ export default function App() {
           <CheckoutPage 
             initialPlanId={checkoutPlan}
             initialBillingCycle={checkoutCycle}
+            returnRoute={returnRoute}
             navigateTo={navigateTo}
           />
         )}
