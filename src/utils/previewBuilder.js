@@ -16,22 +16,54 @@ export function buildPreviewDoc(files) {
   if (isReact && reactCode.trim().length > 0) {
     const safeReactCode = reactCode.replace(/<\/script>/gi, '<\\/script>');
 
-    // Pre-extract JSX tags and icon imports to provide automatic resolution
-    const jsxTags = Array.from(new Set([...safeReactCode.matchAll(/<([A-Z][a-zA-Z0-9_]*)/g)].map(m => m[1])));
+    // 0. Unescape any escaped characters (handles models emitting JSON-encoded strings)
+    let cleaned = safeReactCode
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '  ')
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"');
 
-    // Extract any icon imports and aliases (e.g. import { Save, Download as SaveBtn } from 'lucide-react')
+    // 1. Strip TypeScript type imports & all imports
+    cleaned = cleaned.replace(/import\s+type\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
+    cleaned = cleaned.replace(/import\s+type\s*\{[\s\S]*?\}\s*from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
+    cleaned = cleaned.replace(/import\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [import resolved via sandbox shim]');
+    cleaned = cleaned.replace(/import\s+['"\\].*?['"\\];?/g, '// [side-effect import resolved]');
+
+    // 2. Normalize exports
+    cleaned = cleaned.replace(/export\s*\*\s*from\s+['"\\].*?['"\\];?/g, '// [export * stripped]');
+    cleaned = cleaned.replace(/export\s+(?:default\s+)?(?:async\s+)?function\s+/g, 'function ');
+    cleaned = cleaned.replace(/export\s+(?:default\s+)?class\s+/g, 'class ');
+    cleaned = cleaned.replace(/export\s+(?:default\s+)?(?:const|let|var)\s+/g, (m) => m.replace(/export\s+(?:default\s+)?/, ''));
+    cleaned = cleaned.replace(/export\s+default\s+/g, '// export default ');
+    cleaned = cleaned.replace(/export\s*\{[\s\S]*?\};?/g, '// [exports stripped]');
+
+    // 3. Scan user's declared identifiers to prevent ANY collision with shims
+    const userDeclaredNames = new Set(
+      [...cleaned.matchAll(/(?:function|const|let|var|class)\s+([A-Za-z0-9_]+)/g)].map(m => m[1])
+    );
+
+    // 4. Pre-extract JSX tags and icon imports (filtering out user declarations)
+    const jsxTags = Array.from(new Set([...safeReactCode.matchAll(/<([A-Z][a-zA-Z0-9_]*)/g)].map(m => m[1])))
+      .filter(tag => !userDeclaredNames.has(tag) && tag !== 'App' && tag !== 'Fragment');
+
+    // 5. Extract icon imports & aliases (filtering out user declarations)
     const iconAliases = [];
-    const iconImportRegex = /import\s*\{([\s\S]*?)\}\s*from\s*['"](?:lucide-react|@lucide\/react|react-icons[\/\w-]*)['"];?/g;
+    const iconImportRegex = /import\s*\{([\s\S]*?)\}\s*from\s*['"\\].*?(?:lucide-react|@lucide\/react|react-icons[\/\w-]*).*?['"\\];?/g;
     let iconMatch;
     while ((iconMatch = iconImportRegex.exec(safeReactCode)) !== null) {
       const parts = iconMatch[1].split(',').map(s => s.trim()).filter(Boolean);
       parts.forEach(p => {
         const aliasMatch = p.match(/^(\w+)\s+as\s+(\w+)$/);
         if (aliasMatch) {
-          iconAliases.push({ orig: aliasMatch[1], alias: aliasMatch[2] });
+          if (!userDeclaredNames.has(aliasMatch[2])) {
+            iconAliases.push({ orig: aliasMatch[1], alias: aliasMatch[2] });
+          }
         } else {
           const name = p.replace(/[^\w]/g, '');
-          if (name) iconAliases.push({ orig: name, alias: name });
+          if (name && !userDeclaredNames.has(name)) {
+            iconAliases.push({ orig: name, alias: name });
+          }
         }
       });
     }
@@ -42,10 +74,30 @@ export function buildPreviewDoc(files) {
 
     // Detect default export name if component was not named "App"
     let defaultExportName = '';
-    const defMatch = safeReactCode.match(/export\s+default\s+(?:function\s+)?(\w+)/);
+    const defMatch = safeReactCode.match(/export\s+default\s+(?:function\s+|class\s+)?([A-Za-z0-9_]+)/);
     if (defMatch) {
       defaultExportName = defMatch[1];
     }
+
+    // Filter top icons against user declarations to prevent shadowing collisions
+    const topIcons = [
+      'Save', 'Plus', 'Trash', 'Trash2', 'Edit', 'Edit2', 'Edit3', 'Check', 'X', 'Search', 'Filter',
+      'DollarSign', 'TrendingUp', 'TrendingDown', 'ArrowUpRight', 'ArrowDownRight', 'ArrowLeft', 'ArrowRight',
+      'ArrowUp', 'ArrowDown', 'Wallet', 'CreditCard', 'PieChart', 'BarChart', 'BarChart2', 'Calendar',
+      'Tag', 'ChevronDown', 'ChevronRight', 'ChevronLeft', 'ChevronUp', 'RefreshCw', 'RotateCcw',
+      'Eye', 'EyeOff', 'Lock', 'Unlock', 'Mail', 'User', 'Users', 'UserPlus', 'UserCheck', 'Settings', 'Bell',
+      'Download', 'Upload', 'Shield', 'ShieldCheck', 'CheckCircle', 'CheckCircle2', 'AlertCircle',
+      'AlertTriangle', 'HelpCircle', 'Info', 'Sparkles', 'Moon', 'Sun', 'Layers', 'Home', 'Folder',
+      'FolderPlus', 'FolderOpen', 'File', 'FileText', 'FileCode', 'Code', 'Terminal', 'Cpu', 'Database',
+      'Server', 'HardDrive', 'Wifi', 'WifiOff', 'Clock', 'Compass', 'MapPin', 'Globe', 'Link', 'ExternalLink',
+      'Copy', 'Clipboard', 'Share', 'Share2', 'Send', 'MessageSquare', 'MessageCircle', 'Phone',
+      'Play', 'Pause', 'Square', 'Circle', 'CheckSquare', 'Bookmark', 'Star', 'Heart', 'ThumbsUp',
+      'ThumbsDown', 'Award', 'Zap', 'Activity', 'Sliders', 'Maximize', 'Minimize', 'MoreHorizontal',
+      'MoreVertical', 'Menu', 'Grid', 'List', 'Package', 'ShoppingCart', 'ShoppingBag', 'Truck',
+      'Percent', 'Receipt', 'Printer', 'Camera', 'Image', 'Video', 'Music', 'Volume2', 'VolumeX',
+      'LogOut', 'LogIn', 'Key', 'Briefcase', 'BookOpen', 'Book', 'FileSpreadsheet', 'PenTool', 'Paperclip'
+    ];
+    const safeTopIcons = topIcons.filter(name => !userDeclaredNames.has(name));
 
     return `<!DOCTYPE html>
 <html lang="en" class="dark">
@@ -72,7 +124,7 @@ export function buildPreviewDoc(files) {
       }
     }
   </script>
-  <!-- React 18 & ReactDOM UMD (Fast jsDelivr CDN with unpkg fallback) -->
+  <!-- React 18 & ReactDOM UMD (Fast jsDelivr CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <!-- Lucide Icons -->
@@ -97,10 +149,17 @@ export function buildPreviewDoc(files) {
 
   <!-- Raw source preserved in plain text so Babel never misses DOMContentLoaded -->
   <script id="aethercraft-source" type="text/plain">
-    const { useState, useEffect, useMemo, useRef, useCallback, useContext, createContext, useReducer } = React;
     Object.assign(window, {
-      useState, useEffect, useMemo, useRef, useCallback, useContext, createContext, useReducer,
-      React, ReactDOM
+      React,
+      ReactDOM,
+      useState: React.useState,
+      useEffect: React.useEffect,
+      useMemo: React.useMemo,
+      useRef: React.useRef,
+      useCallback: React.useCallback,
+      useContext: React.useContext,
+      createContext: React.createContext,
+      useReducer: React.useReducer
     });
 
     const LucideIcon = ({ name, size = 18, className = '', color = 'currentColor', ...props }) => {
@@ -130,39 +189,25 @@ export function buildPreviewDoc(files) {
     // 1. Populate all icons from window.lucide if available
     if (window.lucide && window.lucide.icons) {
       Object.keys(window.lucide.icons).forEach(iconName => {
-        window[iconName] = LucideProxy[iconName];
+        if (typeof window[iconName] === 'undefined') {
+          window[iconName] = LucideProxy[iconName];
+        }
       });
     }
 
-    // 2. Pre-assign comprehensive list of top icons to window
-    const topIcons = [
-      'Save', 'Plus', 'Trash', 'Trash2', 'Edit', 'Edit2', 'Edit3', 'Check', 'X', 'Search', 'Filter',
-      'DollarSign', 'TrendingUp', 'TrendingDown', 'ArrowUpRight', 'ArrowDownRight', 'ArrowLeft', 'ArrowRight',
-      'ArrowUp', 'ArrowDown', 'Wallet', 'CreditCard', 'PieChart', 'BarChart', 'BarChart2', 'Calendar',
-      'Tag', 'ChevronDown', 'ChevronRight', 'ChevronLeft', 'ChevronUp', 'RefreshCw', 'RotateCcw',
-      'Eye', 'EyeOff', 'Lock', 'Unlock', 'Mail', 'User', 'Users', 'UserPlus', 'UserCheck', 'Settings', 'Bell',
-      'Download', 'Upload', 'Shield', 'ShieldCheck', 'CheckCircle', 'CheckCircle2', 'AlertCircle',
-      'AlertTriangle', 'HelpCircle', 'Info', 'Sparkles', 'Moon', 'Sun', 'Layers', 'Home', 'Folder',
-      'FolderPlus', 'FolderOpen', 'File', 'FileText', 'FileCode', 'Code', 'Terminal', 'Cpu', 'Database',
-      'Server', 'HardDrive', 'Wifi', 'WifiOff', 'Clock', 'Compass', 'MapPin', 'Globe', 'Link', 'ExternalLink',
-      'Copy', 'Clipboard', 'Share', 'Share2', 'Send', 'MessageSquare', 'MessageCircle', 'Phone',
-      'Play', 'Pause', 'Square', 'Circle', 'CheckSquare', 'Bookmark', 'Star', 'Heart', 'ThumbsUp',
-      'ThumbsDown', 'Award', 'Zap', 'Activity', 'Sliders', 'Maximize', 'Minimize', 'MoreHorizontal',
-      'MoreVertical', 'Menu', 'Grid', 'List', 'Package', 'ShoppingCart', 'ShoppingBag', 'Truck',
-      'Percent', 'Receipt', 'Printer', 'Camera', 'Image', 'Video', 'Music', 'Volume2', 'VolumeX',
-      'LogOut', 'LogIn', 'Key', 'Briefcase', 'BookOpen', 'Book', 'FileSpreadsheet', 'PenTool', 'Paperclip'
-    ];
-    topIcons.forEach(name => {
+    // 2. Pre-assign safe list of top icons to window
+    const safeTopIconsList = ${JSON.stringify(safeTopIcons)};
+    safeTopIconsList.forEach(name => {
       window[name] = LucideProxy[name];
     });
 
     // 3. Bind any imported icon aliases directly onto window
     ${aliasAssignments}
 
-    // 4. Bind all detected JSX PascalCase tags onto window if undefined (fail-safe for unimported icons)
+    // 4. Bind detected JSX PascalCase tags onto window if undefined (fail-safe for unimported icons)
     const detectedTags = ${JSON.stringify(jsxTags)};
     detectedTags.forEach(tag => {
-      if (typeof window[tag] === 'undefined' && tag !== 'App' && tag !== 'Fragment') {
+      if (typeof window[tag] === 'undefined') {
         window[tag] = LucideProxy[tag];
       }
     });
@@ -186,16 +231,6 @@ export function buildPreviewDoc(files) {
     window.v4 = window.uuid;
     window.confetti = () => {};
 
-    const {
-      Plus, Trash2, Edit, Edit2, Edit3, Trash, Check, X, Search, Filter,
-      DollarSign, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight,
-      Wallet, CreditCard, PieChart, BarChart, Calendar, Tag, ChevronDown,
-      ChevronRight, ArrowLeft, ArrowRight, RefreshCw, Eye, EyeOff, Lock,
-      Mail, User, Settings, Bell, Download, Upload, Shield, CheckCircle,
-      CheckCircle2, AlertCircle, HelpCircle, Info, Sparkles, Moon, Sun, Layers, Home,
-      Save, Folder, Clock, Zap, Cpu, Server, Database, Activity, Star, Heart,
-      motion, AnimatePresence, clsx, cn, axios, uuid, v4, confetti
-    } = window;
 
     // Safe createContext & useContext shims: guarantees destructuring never fails
     const _origCreateContext = React.createContext;
@@ -275,32 +310,16 @@ export function buildPreviewDoc(files) {
     }
 
 
-    ${(() => {
-      let cleaned = safeReactCode;
-      // 0. Unescape any escaped newlines and quotes (handles models that emit JSON-encoded code)
-      cleaned = cleaned
-        .replace(/\\r\\n/g, '\n')
-        .replace(/\\n/g, '\n')
-        .replace(/\\t/g, '  ')
-        .replace(/\\'/g, "'")
-        .replace(/\\"/g, '"');
-
-      // 1. Multi-line and single-line imports
-      cleaned = cleaned.replace(/import\s+[\s\S]*?from\s+['"].*?['"];?/g, '// [import resolved via sandbox shim]');
-      // 2. Side-effect imports
-      cleaned = cleaned.replace(/import\s+['"].*?['"];?/g, '// [side-effect import resolved]');
-      // 3. Normalize exports
-      cleaned = cleaned.replace(/export\s+default\s+function\s+/g, 'function ');
-      cleaned = cleaned.replace(/export\s+default\s+class\s+/g, 'class ');
-      cleaned = cleaned.replace(/export\s+default\s+/g, '// export default ');
-      cleaned = cleaned.replace(/export\s+(?:const|let|var)\s+/g, (m) => m.replace('export ', ''));
-      cleaned = cleaned.replace(/export\s*\{[\s\S]*?\};?/g, '// [exports stripped]');
-      return cleaned;
-    })()}
+    ${cleaned}
 
     const defaultExp = '${defaultExportName}';
-    const targetComponent = (typeof App !== 'undefined' ? App : null) ||
-                            (defaultExp && typeof window[defaultExp] !== 'undefined' ? window[defaultExp] : null);
+    let targetComponent = (typeof App !== 'undefined' ? App : null);
+    if (!targetComponent && defaultExp) {
+      try { targetComponent = eval(defaultExp); } catch (e) {}
+    }
+    if (!targetComponent && defaultExp && typeof window[defaultExp] !== 'undefined') {
+      targetComponent = window[defaultExp];
+    }
     if (targetComponent) {
       const root = ReactDOM.createRoot(document.getElementById('root'));
       root.render(
@@ -345,7 +364,8 @@ export function buildPreviewDoc(files) {
         if (!sourceEl) return;
         var rawCode = sourceEl.textContent;
         var compiled = Babel.transform(rawCode, {
-          presets: ['react']
+          presets: ['react', 'typescript'],
+          filename: 'App.tsx'
         }).code;
         var runner = new Function(compiled);
         runner();

@@ -54,6 +54,9 @@ APPLICATION ARCHITECTURE & STANDARDS:
    - Use Tailwind CSS for modern, high-contrast, clean UI styling (dark obsidian/zinc palette, subtle borders, sharp typography).
    - Use Lucide icons: import { Plus, Trash2, DollarSign, TrendingUp, Filter, Search, ... } from 'lucide-react';
    - For full-stack features (databases, CRUD, persistent state, expense tracking, authentication simulation), implement robust client-side state with localStorage persistence and mock API helpers so the app is 100% interactive and functional inside the browser sandbox.
+2. Component & Identifier Naming (CRITICAL):
+   - NEVER name a component, function, or variable one of these reserved words: Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server.
+   - Always use domain-specific, compound names instead (e.g. "FilterPanel", "SearchBar", "SaveButton", "TagBadge", "UserProfile", "DatabaseManager").
 3. React Context & Hooks Safety (CRITICAL):
    - Never call a context hook (e.g. useApp()) inside the component that declares or renders its own <AppContext.Provider>. Calling context outside its provider returns undefined and crashes destructuring.
    - If using React Context, always initialize React.createContext({ ... }) with realistic default values (e.g. createContext({ user: { name: 'Alex' }, expenses: [] })).
