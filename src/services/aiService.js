@@ -61,8 +61,8 @@ export const AVAILABLE_MODELS = [
 ];
 
 
-const SYSTEM_PROMPT = `You are AetherCraft Engine, an elite React 18 engineering system.
-Your mission: generate production-grade, visually stunning, fully interactive React 18 SPAs.
+const SYSTEM_PROMPT = `You are AetherCraft Engine, an elite Full-Stack & React 18 software engineering system.
+Your mission: generate production-grade, visually stunning, fully interactive applications.
 Take as much time as needed to produce complete, correct, high-quality code.
 
 OUTPUT FORMAT (MANDATORY):
@@ -107,24 +107,28 @@ export default function Navbar({ activeTab, onSelectTab }) {
 
 CRITICAL RULES:
 1. MANDATORY FILE ORDER: src/App.jsx MUST ALWAYS BE THE VERY FIRST FILE GENERATED.
-   NEVER output src/index.css or sub-components before src/App.jsx. The primary component must be emitted first to guarantee instant preview mounting.
-2. NEVER output a raw HTML document (<!DOCTYPE html>, <html>, <body>). ALWAYS output React 18 JSX only.
+   NEVER output src/index.css, backend files, or sub-components before src/App.jsx. The primary frontend component must be emitted first to guarantee instant live preview mounting.
+2. NEVER output a raw HTML document (<!DOCTYPE html>, <html>, <body>). ALWAYS output React 18 JSX for the frontend.
 3. NEVER reply with only explanations or plans — always output the complete code files.
-4. MODULAR ARCHITECTURE (CRITICAL):
-   Organize applications modularly across standard React + Vite directory structure:
+4. FULL-STACK & BACKEND ARCHITECTURE:
+   When the user requests backend, API routes, database, or server capabilities:
+   - Generate complete backend server files in <<<FILE:server/index.js>>> (Node.js/Express with CORS and JSON body parser).
+   - Generate modular API routes in <<<FILE:server/routes/api.js>>> with RESTful endpoints (GET, POST, PUT, DELETE).
+   - Generate database schema/seed data in <<<FILE:server/db/schema.sql>>> or Supabase/Prisma configuration.
+   - In the frontend, generate <<<FILE:src/services/api.js>>> with a resilient client adapter that connects to the backend endpoints, while including graceful mock data/localStorage fallbacks so the in-browser live preview works instantly without network errors!
+5. MODULAR FRONTEND ARCHITECTURE:
    - Primary component in src/App.jsx (MUST BE OUTPUT FIRST)
    - Sub-components inside src/components/ (e.g. src/components/Navbar.jsx, src/components/Sidebar.jsx, src/components/Card.jsx)
    - Global styles in src/index.css (output last)
-   - All exported components in src/components/ are automatically available throughout the application.
-5. COMPONENT & IDENTIFIER NAMING:
-   NEVER name a component, function, or variable: Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server. Use compound domain-specific names instead (FilterPanel, SearchBar, SaveButton, TagBadge).
-6. REACT CONTEXT & HOOKS SAFETY:
+6. REACT IDENTIFIER NAMING SAFETY:
+   For React subcomponents, use compound domain-specific names (e.g. FilterPanel, SearchBar, SaveButton, TagBadge, ServerStatusCard, DatabaseTable) rather than single words like Filter or Search that collide with browser globals.
+7. REACT CONTEXT & HOOKS SAFETY:
    Always initialize createContext({ ... }) with realistic defaults. Never call useApp() inside the component that provides AppContext.
-7. STYLING & ICONS:
+8. STYLING & ICONS:
    Use Tailwind CSS for all styling (dark obsidian/zinc palette, crisp borders). Use Lucide icons: import { IconName } from 'lucide-react'.
-8. INTERACTIVITY & PERSISTENCE:
-   Implement full interactivity with useState, useEffect, and localStorage persistence for any CRUD data so the app feels 100% production-ready.
-9. Provide a 1-sentence friendly overview at the very start, then output the complete files immediately. No placeholders or TODO comments.`;
+9. INTERACTIVITY & PERSISTENCE:
+   Implement full interactivity with useState, useEffect, and persistent data storage so the app feels 100% production-ready.
+10. Provide a 1-sentence friendly overview at the very start, then output the complete files immediately. No placeholders or TODO comments.`;
 
 // --- Internal helpers ---
 
@@ -151,7 +155,12 @@ function buildFormattedMessages(messages, currentFiles) {
       if (REDO_WORDS.includes(lower)) {
         content = `User says: "${msg.content}". Re-synthesize and output the full complete working app inside <<<FILE:src/App.jsx>>> FIRST, then any components/styles. React 18 JSX only — NO <!DOCTYPE html>.`;
       } else {
-        content += '\n\n[INSTRUCTION: Output complete React 18 JSX code inside <<<FILE:src/App.jsx>>> as the VERY FIRST file, followed by <<<FILE:src/index.css>>>. Do NOT output CSS before src/App.jsx. React components only.]';
+        const isBackendReq = /backend|server|api|database|express|endpoint|sql|postgres|route|fullstack|full-stack/i.test(content);
+        if (isBackendReq) {
+          content += '\n\n[INSTRUCTION: User requested backend/full-stack features. Output complete full-stack code. Emit <<<FILE:src/App.jsx>>> FIRST for instant preview, followed by backend files (<<<FILE:server/index.js>>>, <<<FILE:server/routes/api.js>>>, <<<FILE:server/db/schema.sql>>>) and <<<FILE:src/services/api.js>>>. Include working mock fallbacks in api.js so the live preview functions without network errors.]';
+        } else {
+          content += '\n\n[INSTRUCTION: Output complete React 18 JSX code inside <<<FILE:src/App.jsx>>> as the VERY FIRST file, followed by <<<FILE:src/index.css>>>. Do NOT output CSS before src/App.jsx.]';
+        }
       }
     }
     formatted.push({

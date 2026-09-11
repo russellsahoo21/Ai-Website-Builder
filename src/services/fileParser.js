@@ -28,13 +28,28 @@ function normalizeFilePath(name) {
   if (!name) return 'src/App.jsx';
   if (name === 'App.jsx' || name === 'App.js') return 'src/App.jsx';
   if (name === 'styles.css' || name === 'style.css' || name === 'src/styles.css') return 'src/index.css';
-  if (name.startsWith('components/') || name.startsWith('hooks/') || name.startsWith('utils/')) return `src/${name}`;
+  if (name.startsWith('components/') || name.startsWith('hooks/') || name.startsWith('utils/') || name.startsWith('services/')) return `src/${name}`;
+  // Explicitly preserve backend and database directories
+  if (name.startsWith('server/') || name.startsWith('api/') || name.startsWith('db/') || name.startsWith('models/') || name === 'server.js') return name;
   return name;
 }
 
 function classifyContent(content) {
   if (!content) return 'src/App.jsx';
   if (isHtmlDocument(content)) return 'index.html';
+  if (
+    content.includes('express()') ||
+    content.includes("require('express')") ||
+    content.includes('require("express")') ||
+    content.includes("from 'express'") ||
+    content.includes('from "express"') ||
+    content.includes('app.listen(')
+  ) return 'server/index.js';
+  if (
+    content.includes('CREATE TABLE') ||
+    content.includes('ALTER TABLE') ||
+    content.includes('INSERT INTO')
+  ) return 'server/db/schema.sql';
   if (
     content.includes('import React') ||
     content.includes('useState') ||

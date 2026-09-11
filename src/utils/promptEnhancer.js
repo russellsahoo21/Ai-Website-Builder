@@ -136,6 +136,27 @@ KEY FEATURES:
 - Slide-out Cart Drawer with item quantity modification, promo codes, and animated checkout modal.`;
   }
 
+
+  // BACKEND & FULL-STACK REQUESTS
+  if (
+    norm.includes('backend') || norm.includes('server') || norm.includes('api') ||
+    norm.includes('database') || norm.includes('express') || norm.includes('fullstack') ||
+    norm.includes('full stack') || norm.includes('rest api') || norm.includes('crud api')
+  ) {
+    return `You are building a production-grade FULL-STACK application (Frontend React 18 + Backend Node/Express API + Database Schema) based on: "${trimmed}"
+
+MANDATORY ARCHITECTURAL RULES:
+1. OUTPUT ORDER: Output <<<FILE:src/App.jsx>>> as the VERY FIRST file so the live browser preview mounts instantly.
+2. BACKEND SERVER:
+   - Create <<<FILE:server/index.js>>>: Complete Express server with CORS, JSON body parser, and port 5000 listener.
+   - Create <<<FILE:server/routes/api.js>>>: Complete RESTful API routes (GET, POST, PUT, DELETE) handling resource operations.
+   - Create <<<FILE:server/db/schema.sql>>>: Complete PostgreSQL/SQLite schema with primary keys, foreign keys, and initial seed data.
+3. FRONTEND INTEGRATION:
+   - Create <<<FILE:src/services/api.js>>>: API service client that calls the backend routes with a smart fallback to mock/in-memory data so the in-browser preview runs seamlessly without failed network requests.
+   - In <<<FILE:src/App.jsx>>>, import and use this API service to fetch, create, update, and delete data with live UI state updates and status indicators.
+4. Clean, modular code without TODOs or placeholder comments.`;
+  }
+
   // 3. GENERAL HIGH-GRADE WEB APPLICATION
   return `You are building a production-grade, visually stunning React 18 single-page application with Tailwind CSS and Lucide icons based on: "${trimmed}"
 

@@ -82,11 +82,32 @@ body {
 }
 `;
 
-export function getPackageJson(projectName = 'react-app') {
+export function getPackageJson(projectName = 'react-app', files = {}) {
   const safeName = projectName
     .toLowerCase()
     .replace(/[^a-z0-9-_]/g, '-')
     .replace(/^-+|-+$/g, '') || 'react-app';
+
+  const hasBackend = Object.keys(files).some(k => k.startsWith('server/') || k === 'server.js' || k.startsWith('api/'));
+
+  const scripts = {
+    dev: 'vite',
+    build: 'vite build',
+    preview: 'vite preview'
+  };
+
+  const dependencies = {
+    react: '^18.3.1',
+    'react-dom': '^18.3.1',
+    'lucide-react': '^0.475.0'
+  };
+
+  if (hasBackend) {
+    scripts.server = 'node server/index.js';
+    scripts.start = 'node server/index.js';
+    dependencies.express = '^4.21.2';
+    dependencies.cors = '^2.8.5';
+  }
 
   return JSON.stringify(
     {
@@ -94,16 +115,8 @@ export function getPackageJson(projectName = 'react-app') {
       private: true,
       version: '1.0.0',
       type: 'module',
-      scripts: {
-        dev: 'vite',
-        build: 'vite build',
-        preview: 'vite preview'
-      },
-      dependencies: {
-        react: '^18.3.1',
-        'react-dom': '^18.3.1',
-        'lucide-react': '^0.475.0'
-      },
+      scripts,
+      dependencies,
       devDependencies: {
         '@vitejs/plugin-react': '^4.3.4',
         autoprefixer: '^10.4.20',
@@ -193,7 +206,7 @@ export default function App() {
 
   // 8. Ensure package.json exists
   if (!files['package.json']) {
-    files['package.json'] = getPackageJson(projectName);
+    files['package.json'] = getPackageJson(projectName, files);
   }
 
   // 9. Ensure vite.config.js exists
