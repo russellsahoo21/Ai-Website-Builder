@@ -32,8 +32,11 @@ import {
   duplicateProject, 
   getActiveProjectId, 
   setActiveProjectId, 
-  deriveProjectName 
+  deriveProjectName,
+  setCurrentUserId,
+  syncProjectsWithCloud
 } from './services/projectService';
+import { syncUserProfile } from './services/dbService';
 
 function getRouteFromHash() {
   const hash = window.location.hash.replace('#/', '').replace('#', '').split('?')[0];
@@ -42,7 +45,7 @@ function getRouteFromHash() {
 }
 
 export default function App() {
-  const { isSignedIn, isLoaded } = useUser();
+  const { isSignedIn, isLoaded, user } = useUser();
   const clerk = useClerk();
 
   // — Routing & Checkout state —
@@ -94,7 +97,30 @@ export default function App() {
 
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Auto-save active project changes to localStorage (debounced)
+  // Cloud Database Sync on Login
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (isSignedIn && user) {
+      setCurrentUserId(user.id);
+      syncUserProfile(user);
+      syncProjectsWithCloud(user.id).then(syncedProjects => {
+        if (syncedProjects && syncedProjects.length > 0) {
+          setProjects(syncedProjects);
+          const activeId = getActiveProjectId();
+          const active = syncedProjects.find(p => p.id === activeId) || syncedProjects[0];
+          if (active) {
+            setActiveProjectIdState(active.id);
+            setFiles(active.files || {});
+            setMessages(active.messages || []);
+          }
+        }
+      });
+    } else {
+      setCurrentUserId(null);
+    }
+  }, [isLoaded, isSignedIn, user]);
+
+  // Auto-save active project changes to localStorage & Cloud (debounced)
   useEffect(() => {
     if (!activeProjectId) return;
     const currentProj = projects.find(p => p.id === activeProjectId);

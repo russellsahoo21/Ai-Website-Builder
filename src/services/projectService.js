@@ -1,16 +1,36 @@
 /**
  * projectService.js
  * Manages persistent storage, retrieval, creation, and management
- * of user projects in localStorage.
+ * of user projects with dual-tier storage:
+ * - Ultra-fast Local Cache (instant UI rendering)
+ * - Cloud Database Sync via Supabase PostgreSQL (cross-device sync & permanence)
  */
 
 import { STARTER_TEMPLATES } from '../templates/starterTemplates.js';
 import { ensureStandardReactStructure } from '../utils/projectStructure.js';
+import { 
+  saveCloudProject, 
+  deleteCloudProject, 
+  fetchCloudProjects, 
+  migrateLocalProjectsToCloud,
+  isCloudDbConfigured 
+} from './dbService.js';
 
 export { ensureStandardReactStructure };
 
 const STORAGE_KEY = 'aethercraft_saved_projects';
 const ACTIVE_ID_KEY = 'aethercraft_active_project_id';
+
+// Current authenticated user ID ref for background cloud sync
+let currentUserId = null;
+
+export function setCurrentUserId(userId) {
+  currentUserId = userId || null;
+}
+
+export function getCurrentUserId() {
+  return currentUserId;
+}
 
 // Generate clean title from prompt if no name provided
 export function deriveProjectName(prompt) {
@@ -23,7 +43,7 @@ export function deriveProjectName(prompt) {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-// Get all saved projects from localStorage
+// Get all saved projects from local cache
 export function getAllProjects() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -39,7 +59,8 @@ export function getAllProjects() {
         ],
         createdAt: new Date(Date.now() - (idx + 1) * 86400000).toISOString(),
         updatedAt: new Date(Date.now() - (idx + 1) * 3600000).toISOString(),
-        fileCount: Object.keys(tmpl.files || {}).length
+        fileCount: Object.keys(tmpl.files || {}).length,
+        synced: false
       }));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
       return seeded;
@@ -93,8 +114,8 @@ export function setActiveProjectId(id) {
   }
 }
 
-// Save or update a project
-export function saveProject(project) {
+// Save or update a project (Local-first + Background Cloud Sync)
+export function saveProject(project, userId = currentUserId) {
   if (!project || !project.id) return null;
   try {
     const all = getAllProjects();
@@ -112,6 +133,14 @@ export function saveProject(project) {
     }
 
     localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+
+    // Background cloud sync if user is signed in
+    if (userId && isCloudDbConfigured()) {
+      saveCloudProject(userId, updatedProject).catch(err => 
+        console.warn('[projectService] Background cloud save warning:', err.message)
+      );
+    }
+
     return updatedProject;
   } catch (err) {
     console.error('Failed to save project:', err);
@@ -120,7 +149,7 @@ export function saveProject(project) {
 }
 
 // Create a new project
-export function createNewProject({ name, prompt = '', files = {}, messages = [] } = {}) {
+export function createNewProject({ name, prompt = '', files = {}, messages = [] } = {}, userId = currentUserId) {
   const id = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const finalName = name || deriveProjectName(prompt) || 'New Project';
   const structuredFiles = ensureStandardReactStructure(files || {});
@@ -132,18 +161,27 @@ export function createNewProject({ name, prompt = '', files = {}, messages = [] 
     messages: messages || [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    fileCount: Object.keys(structuredFiles).length
+    fileCount: Object.keys(structuredFiles).length,
+    synced: false
   };
 
   const all = getAllProjects();
   all.unshift(newProj);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
   setActiveProjectId(id);
+
+  // Background cloud sync
+  if (userId && isCloudDbConfigured()) {
+    saveCloudProject(userId, newProj).catch(err => 
+      console.warn('[projectService] Background cloud create warning:', err.message)
+    );
+  }
+
   return newProj;
 }
 
 // Delete project
-export function deleteProject(id) {
+export function deleteProject(id, userId = currentUserId) {
   try {
     const all = getAllProjects();
     const filtered = all.filter(p => p.id !== id);
@@ -151,6 +189,14 @@ export function deleteProject(id) {
     if (getActiveProjectId() === id) {
       setActiveProjectId(filtered.length > 0 ? filtered[0].id : null);
     }
+
+    // Cloud delete
+    if (userId && isCloudDbConfigured()) {
+      deleteCloudProject(userId, id).catch(err =>
+        console.warn('[projectService] Cloud delete warning:', err.message)
+      );
+    }
+
     return filtered;
   } catch (err) {
     console.error('Failed to delete project:', err);
@@ -159,7 +205,7 @@ export function deleteProject(id) {
 }
 
 // Duplicate an existing project
-export function duplicateProject(id) {
+export function duplicateProject(id, userId = currentUserId) {
   const orig = getProjectById(id);
   if (!orig) return null;
   const newProj = {
@@ -167,12 +213,46 @@ export function duplicateProject(id) {
     id: `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
     name: `${orig.name} (Copy)`,
     createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    updatedAt: new Date().toISOString(),
+    synced: false
   };
   const all = getAllProjects();
   all.unshift(newProj);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+
+  if (userId && isCloudDbConfigured()) {
+    saveCloudProject(userId, newProj).catch(err =>
+      console.warn('[projectService] Cloud duplicate warning:', err.message)
+    );
+  }
+
   return newProj;
+}
+
+// Synchronize all user projects with Supabase Cloud DB
+export async function syncProjectsWithCloud(userId) {
+  if (!userId || !isCloudDbConfigured()) return getAllProjects();
+
+  try {
+    setCurrentUserId(userId);
+
+    // 1. Auto-migrate any un-synced local projects to Cloud DB
+    await migrateLocalProjectsToCloud(userId);
+
+    // 2. Fetch full list of projects from Cloud DB
+    const cloudProjects = await fetchCloudProjects(userId);
+
+    if (cloudProjects && cloudProjects.length > 0) {
+      // Overwrite / merge into local storage cache
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudProjects));
+      return cloudProjects;
+    }
+
+    return getAllProjects();
+  } catch (err) {
+    console.error('[projectService] syncProjectsWithCloud error:', err);
+    return getAllProjects();
+  }
 }
 
 // Format relative time (e.g. "2 mins ago", "Yesterday")

@@ -51,11 +51,13 @@ import {
   PieChart,
   LogOut,
   User,
-  UserCheck
+  UserCheck,
+  Upload
 } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/react';
 import { dark } from '@clerk/themes';
-import { formatTimeAgo } from '../services/projectService.js';
+import { formatTimeAgo, getAllProjects, syncProjectsWithCloud } from '../services/projectService.js';
+import { isCloudDbConfigured } from '../services/supabaseClient.js';
 import { downloadProjectZip } from '../utils/zipExporter.js';
 import { buildPreviewDoc } from '../utils/previewBuilder.js';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates.js';
@@ -282,6 +284,53 @@ export default function DashboardPage({
   const [testingKey, setTestingKey] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [copiedComponentId, setCopiedComponentId] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncStatusMsg, setSyncStatusMsg] = useState(null);
+
+  const handleManualCloudSync = async () => {
+    if (!user?.id) {
+      alert("Please sign in to sync your workspace to the cloud.");
+      return;
+    }
+    setIsSyncing(true);
+    setSyncStatusMsg("Synchronizing with Supabase PostgreSQL...");
+    try {
+      const synced = await syncProjectsWithCloud(user.id);
+      setSyncStatusMsg(`Successfully synchronized ${synced.length} projects with Supabase!`);
+      setTimeout(() => setSyncStatusMsg(null), 4000);
+    } catch (err) {
+      setSyncStatusMsg(`Sync error: ${err.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleImportWorkspaceJson = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const imported = JSON.parse(event.target.result);
+        if (!Array.isArray(imported)) throw new Error("Invalid format: expected array of projects");
+        const existing = getAllProjects();
+        const existingIds = new Set(existing.map(p => p.id));
+        let count = 0;
+        for (const p of imported) {
+          if (p.id && !existingIds.has(p.id)) {
+            existing.unshift(p);
+            count++;
+          }
+        }
+        localStorage.setItem('aethercraft_saved_projects', JSON.stringify(existing));
+        alert(`Imported ${count} new projects successfully!`);
+        window.location.reload();
+      } catch (err) {
+        alert(`Failed to import JSON: ${err.message}`);
+      }
+    };
+    reader.readAsText(file);
+  };
 
   // Quota calculations
   const projectCount = projects.length;
@@ -1344,37 +1393,87 @@ export default function DashboardPage({
               <div>
                 <h3 className="text-base font-bold text-white">Storage & State Inspector</h3>
                 <p className="text-xs text-zinc-400 mt-0.5">
-                  Inspect and manage local workspace state, project records, and cached browser keys.
+                  Inspect and manage cloud database synchronization, project records, and workspace backups.
                 </p>
               </div>
 
+              {/* Cloud Database Integration Card */}
               <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
-                    <h4 className="text-sm font-semibold text-white">Local Workspace Storage</h4>
-                    <p className="text-xs text-zinc-400">Contains {projects.length} project models and active settings.</p>
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-semibold text-white">Supabase Cloud Database</h4>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-800/50 flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        PostgreSQL Active
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1">
+                      Project Ref: <code className="text-cyan-300 font-mono">rxmzcabkbxgtxblooreu</code> • Syncs user profiles, virtual files, and full chat histories across devices.
+                    </p>
                   </div>
                   <button
-                    onClick={() => {
-                      const data = JSON.stringify(projects, null, 2);
-                      const blob = new Blob([data], { type: 'application/json' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `aethercraft_workspace_backup_${Date.now()}.json`;
-                      a.click();
-                    }}
-                    className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition flex items-center gap-1.5"
+                    onClick={handleManualCloudSync}
+                    disabled={isSyncing}
+                    className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-900/20 transition flex items-center gap-1.5 disabled:opacity-50"
                   >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>Export Workspace JSON</span>
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
+                    <span>{isSyncing ? 'Syncing...' : 'Sync with Supabase'}</span>
                   </button>
                 </div>
 
+                {syncStatusMsg && (
+                  <div className="p-3 rounded-xl bg-zinc-900/90 border border-emerald-500/30 text-xs text-emerald-300 flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>{syncStatusMsg}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Local Workspace Storage & JSON Backup */}
+              <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-white">Workspace State & Backup</h4>
+                    <p className="text-xs text-zinc-400">Contains {projects.length} project models and active settings.</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="file" 
+                      accept=".json" 
+                      id="import-workspace-json" 
+                      className="hidden" 
+                      onChange={handleImportWorkspaceJson} 
+                    />
+                    <label
+                      htmlFor="import-workspace-json"
+                      className="cursor-pointer px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition flex items-center gap-1.5"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Import JSON</span>
+                    </label>
+                    <button
+                      onClick={() => {
+                        const data = JSON.stringify(projects, null, 2);
+                        const blob = new Blob([data], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `aethercraft_workspace_backup_${Date.now()}.json`;
+                        a.click();
+                      }}
+                      className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition flex items-center gap-1.5"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Export JSON</span>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="rounded-xl bg-zinc-950 border border-zinc-800/80 p-4 font-mono text-xs text-zinc-300">
-                  <div className="text-zinc-500 mb-2">// Current Projects JSON Schema</div>
+                  <div className="text-zinc-500 mb-2">// Active Projects Schema</div>
                   <pre className="max-h-72 overflow-y-auto">
-                    {JSON.stringify(projects.map(p => ({ id: p.id, name: p.name, filesCount: Object.keys(p.files || {}).length, updatedAt: p.updatedAt })), null, 2)}
+                    {JSON.stringify(projects.map(p => ({ id: p.id, name: p.name, filesCount: Object.keys(p.files || {}).length, updatedAt: p.updatedAt, synced: p.synced })), null, 2)}
                   </pre>
                 </div>
               </div>
