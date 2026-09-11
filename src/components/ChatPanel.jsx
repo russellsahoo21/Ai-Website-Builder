@@ -6,8 +6,7 @@ import {
   Trash2,
   ChevronRight,
   Sparkles,
-  Square,
-  Zap
+  Square
 } from 'lucide-react';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates';
 import { getCuratedExampleSpec, enhanceUserPrompt } from '../utils/promptEnhancer';
@@ -29,7 +28,6 @@ export default function ChatPanel({
 }) {
   const [input, setInput] = useState('');
   const [elapsed, setElapsed] = useState(0);
-  const [enhancerEnabled, setEnhancerEnabled] = useState(true);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -53,12 +51,8 @@ export default function ChatPanel({
     e.preventDefault();
     if (!input.trim() || isGenerating) return;
     const userText = input.trim();
-    if (enhancerEnabled) {
-      const enriched = getCuratedExampleSpec(userText) || enhanceUserPrompt(userText);
-      onSendMessage(userText, enriched);
-    } else {
-      onSendMessage(userText, userText);
-    }
+    const enriched = getCuratedExampleSpec(userText) || enhanceUserPrompt(userText);
+    onSendMessage(userText, enriched);
     setInput('');
   };
 
@@ -195,23 +189,6 @@ export default function ChatPanel({
 
       {/* Input */}
       <div className="border-t border-zinc-800 bg-[#090a0d]">
-        <div className="flex items-center justify-between px-3 py-1.5 bg-[#0e1017] border-b border-zinc-800/80 text-[11px]">
-          <button
-            type="button"
-            onClick={() => setEnhancerEnabled(prev => !prev)}
-            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full transition cursor-pointer border ${
-              enhancerEnabled 
-                ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25' 
-                : 'bg-zinc-800/60 border-zinc-700/60 text-zinc-500 hover:text-zinc-400'
-            }`}
-            title={enhancerEnabled ? "Smart Prompt Enhancer active (enriches user prompts with full React specs)" : "Smart Prompt Enhancer paused"}
-          >
-            <Zap className={`w-3 h-3 ${enhancerEnabled ? 'text-indigo-400 fill-indigo-400/30' : 'text-zinc-500'}`} />
-            <span className="font-medium text-[10px]">{enhancerEnabled ? '⚡ Prompt Enhancer: Active' : 'Prompt Enhancer: Off'}</span>
-          </button>
-          <span className="text-[10px] text-zinc-500 font-mono">React 18 Engine</span>
-        </div>
-
         <div className="p-3">
           <form onSubmit={handleSubmit} className="relative">
             <textarea
