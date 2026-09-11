@@ -527,12 +527,13 @@ export default function DashboardPage({
                 />
               </div>
               <div className="text-[10px] text-zinc-500 flex items-center justify-between">
-                <span>{MAX_FREE_PROJECTS - projectCount} project slots available</span>
+                <span>{MAX_FREE_PROJECTS - projectCount} slots available</span>
                 <button 
-                  onClick={() => setActiveSidebarTab('settings')}
-                  className="text-zinc-400 hover:text-white underline text-[10px]"
+                  onClick={() => navigateTo('checkout', { plan: 'pro' })}
+                  className="text-amber-400 hover:text-amber-300 font-semibold text-[10px] flex items-center gap-1 cursor-pointer transition"
                 >
-                  Manage
+                  <Sparkles className="w-2.5 h-2.5" />
+                  <span>Upgrade</span>
                 </button>
               </div>
             </div>

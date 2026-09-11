@@ -9,6 +9,7 @@ import IntegrationsPage from './pages/IntegrationsPage';
 import ChangelogPage from './pages/ChangelogPage';
 import PricingPage from './pages/PricingPage';
 import DocsPage from './pages/DocsPage';
+import CheckoutPage from './pages/CheckoutPage';
 import Header from './components/Header';
 import ChatPanel from './components/ChatPanel';
 import PreviewPanel from './components/PreviewPanel';
@@ -34,8 +35,8 @@ import {
 } from './services/projectService';
 
 function getRouteFromHash() {
-  const hash = window.location.hash.replace('#/', '').replace('#', '');
-  const valid = ['templates', 'showcase', 'integrations', 'changelog', 'pricing', 'docs', 'studio', 'dashboard'];
+  const hash = window.location.hash.replace('#/', '').replace('#', '').split('?')[0];
+  const valid = ['templates', 'showcase', 'integrations', 'changelog', 'pricing', 'docs', 'studio', 'dashboard', 'checkout'];
   return valid.includes(hash) ? hash : 'landing';
 }
 
@@ -43,8 +44,10 @@ export default function App() {
   const { isSignedIn, isLoaded } = useUser();
   const clerk = useClerk();
 
-  // — Routing —
+  // — Routing & Checkout state —
   const [currentRoute, setCurrentRoute] = useState(getRouteFromHash);
+  const [checkoutPlan, setCheckoutPlan] = useState('pro');
+  const [checkoutCycle, setCheckoutCycle] = useState('annual');
 
   // — Studio UI state —
   const [activeTab, setActiveTab] = useState('preview');
@@ -161,11 +164,13 @@ export default function App() {
     return () => window.removeEventListener('hashchange', onHash);
   }, [isSignedIn, isLoaded, clerk]);
 
-  const navigateTo = (route) => {
+  const navigateTo = (route, params = {}) => {
     if ((route === 'studio' || route === 'dashboard') && !isSignedIn) { 
       clerk.openSignIn(); 
       return; 
     }
+    if (params.plan) setCheckoutPlan(params.plan);
+    if (params.cycle) setCheckoutCycle(params.cycle);
     setCurrentRoute(route);
     window.location.hash = route === 'landing' ? '' : `/${route}`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -441,6 +446,13 @@ export default function App() {
         {currentRoute === 'changelog' && <ChangelogPage />}
         {currentRoute === 'pricing' && <PricingPage navigateTo={navigateTo} />}
         {currentRoute === 'docs' && <DocsPage navigateTo={navigateTo} />}
+        {currentRoute === 'checkout' && (
+          <CheckoutPage 
+            initialPlanId={checkoutPlan}
+            initialBillingCycle={checkoutCycle}
+            navigateTo={navigateTo}
+          />
+        )}
       </main>
 
       <Footer navigateTo={navigateTo} />

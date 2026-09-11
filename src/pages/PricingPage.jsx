@@ -6,53 +6,52 @@ export default function PricingPage({ navigateTo }) {
 
   const plans = [
     {
-      name: "Starter / Hobby",
+      id: "free",
+      name: "Developer Free",
       price: "$0",
       period: "forever",
-      desc: "For exploring AI vibe coding and prototyping simple apps.",
+      desc: "For prototyping personal ideas.",
       features: [
+        "Unlimited generations",
+        "In-memory live sandbox",
+        "1-Click ZIP export",
         "Unlimited Free OpenRouter Models",
-        "NVIDIA Nemotron 3 Ultra (550B MoE)",
-        "Qwen 2.5 Coder 32B Access",
-        "Zero-latency in-browser live sandbox",
-        "Responsive Desktop/Tablet/Mobile views",
-        "1-Click ZIP project download",
         "Community Discord support"
       ],
-      cta: "Launch Free Studio",
+      cta: "Get Started Free",
       featured: false
     },
     {
-      name: "Pro Builder",
+      id: "pro",
+      name: "Pro Founder",
       price: billingCycle === 'annual' ? "$16" : "$20",
       period: "per month",
-      desc: "For professional makers, freelancers, and startup founders.",
+      desc: "For indie makers shipping commercial products.",
       features: [
-        "Everything in Starter",
-        "Frontier models: Claude 3.5 Sonnet & GPT-4o",
-        "Priority high-speed generation queue",
-        "Persistent project cloud saves",
-        "Custom domain publishing with SSL",
-        "Multi-page component architecture",
-        "Priority email & chat support"
+        "Everything in Free",
+        "Priority synthesis speed",
+        "Custom domain publishing",
+        "Multi-turn architectural memory",
+        "Unlimited persistent project saves",
+        "Priority engineering support"
       ],
-      cta: "Upgrade to Pro",
+      cta: "Start Pro Plan",
       featured: true
     },
     {
-      name: "Team & Agency",
+      id: "team",
+      name: "Team Workspace",
       price: billingCycle === 'annual' ? "$40" : "$49",
       period: "per month",
-      desc: "For agencies and development teams shipping client sites.",
+      desc: "For agencies and digital teams.",
       features: [
-        "Everything in Pro",
-        "5 team member seats included",
-        "Shared project workspace & live sync",
-        "White-label exports (remove watermark)",
-        "Custom Supabase backend integration",
+        "5 team member seats",
+        "Shared workspace sync",
+        "White-label export options",
+        "Shared custom API keys pool",
         "Dedicated account manager & SLA"
       ],
-      cta: "Start Team Trial",
+      cta: "Contact Team Sales",
       featured: false
     }
   ];
@@ -132,11 +131,17 @@ export default function PricingPage({ navigateTo }) {
             </div>
 
             <button
-              onClick={() => navigateTo('studio')}
-              className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition ${
+              onClick={() => {
+                if (p.id === 'free') {
+                  navigateTo('studio');
+                } else {
+                  navigateTo('checkout', { plan: p.id, cycle: billingCycle });
+                }
+              }}
+              className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer ${
                 p.featured
-                  ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30'
-                  : 'bg-white/10 hover:bg-white/15 text-white'
+                  ? 'bg-white hover:bg-zinc-200 text-black shadow-lg shadow-white/10 font-semibold'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-white'
               }`}
             >
               {p.cta}

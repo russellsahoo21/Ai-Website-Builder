@@ -430,20 +430,12 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
               </ul>
             </div>
 
-            {(!isLoaded || !isSignedIn) ? (
-              <SignUpButton mode="modal">
-                <button className="w-full py-2.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition shadow-sm cursor-pointer">
-                  Start Pro Plan
-                </button>
-              </SignUpButton>
-            ) : (
-              <button
-                onClick={() => navigateTo('studio')}
-                className="w-full py-2.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition shadow-sm cursor-pointer"
-              >
-                Start Pro Plan
-              </button>
-            )}
+            <button
+              onClick={() => navigateTo('checkout', { plan: 'pro', cycle: billingCycle })}
+              className="w-full py-2.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition shadow-sm cursor-pointer"
+            >
+              Start Pro Plan
+            </button>
           </div>
 
           <div className="p-7 rounded-xl bg-[#111317] border border-zinc-800 flex flex-col justify-between">
@@ -460,20 +452,12 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
               </ul>
             </div>
 
-            {(!isLoaded || !isSignedIn) ? (
-              <SignUpButton mode="modal">
-                <button className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition cursor-pointer">
-                  Contact Team Sales
-                </button>
-              </SignUpButton>
-            ) : (
-              <button
-                onClick={() => navigateTo('studio')}
-                className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition cursor-pointer"
-              >
-                Contact Team Sales
-              </button>
-            )}
+            <button
+              onClick={() => navigateTo('checkout', { plan: 'team', cycle: billingCycle })}
+              className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition cursor-pointer"
+            >
+              Contact Team Sales
+            </button>
           </div>
         </div>
       </section>
