@@ -164,11 +164,6 @@ export function buildPreviewDoc(files) {
 <body class="min-h-screen bg-[#090a0f] text-zinc-100 antialiased selection:bg-zinc-700">
   <div id="root"></div>
 
-  <div id="sandbox-error" style="display:none; padding:20px; margin:20px; background:#18181b; border:1px solid #ef4444; border-radius:8px; font-family:monospace; color:#f87171;">
-    <h3 style="font-weight:bold; margin-bottom:8px; font-size:14px; color:#ef4444;">Runtime Error</h3>
-    <pre id="sandbox-error-msg" style="white-space:pre-wrap; font-size:12px;"></pre>
-  </div>
-
   <!-- Raw source preserved in plain text so Babel never misses DOMContentLoaded -->
   <script id="aethercraft-source" type="text/plain">
     Object.assign(window, {
@@ -287,13 +282,7 @@ export function buildPreviewDoc(files) {
         return { hasError: true, error };
       }
       componentDidCatch(error, errorInfo) {
-        console.error("ErrorBoundary caught:", error, errorInfo);
-        const errBox = document.getElementById('sandbox-error');
-        const errMsg = document.getElementById('sandbox-error-msg');
-        if (errBox && errMsg) {
-          errBox.style.display = 'block';
-          errMsg.textContent = (error?.message || String(error)) + '\\n' + (error?.stack || '');
-        }
+        console.error('[Sandbox ErrorBoundary]', error.message);
         try {
           window.parent.postMessage({
             type: 'SANDBOX_RUNTIME_ERROR',
@@ -306,26 +295,9 @@ export function buildPreviewDoc(files) {
       }
       render() {
         if (this.state.hasError) {
-          return (
-            <div className="p-6 m-4 rounded-xl bg-zinc-900 border border-red-500/50 text-red-400 font-mono text-sm">
-              <h3 className="font-bold text-base text-red-400 mb-2">Rendering Error</h3>
-              <p className="text-xs text-zinc-300 mb-3">{this.state.error?.message || 'Component failed to render.'}</p>
-              <pre className="text-[11px] text-zinc-500 overflow-x-auto whitespace-pre-wrap">{this.state.error?.stack || ''}</pre>
-              <button
-                onClick={() => {
-                  try {
-                    window.parent.postMessage({
-                      type: 'TRIGGER_AUTO_FIX',
-                      error: { message: this.state.error?.message || 'Rendering error' }
-                    }, '*');
-                  } catch (e) {}
-                }}
-                style={{ marginTop: 12, padding: '6px 14px', borderRadius: 8, background: '#dc2626', color: '#fff', border: 'none', fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-              >
-                ⚡ Auto-Fix with AI in Background
-              </button>
-            </div>
-          );
+          // Show nothing — BTS repair handles this silently in the background.
+          // Returning null keeps the last rendered state visible.
+          return null;
         }
         return this.props.children;
       }
@@ -351,29 +323,35 @@ export function buildPreviewDoc(files) {
         if (window.lucide) window.lucide.createIcons();
       }, 150);
     } else {
-      document.getElementById('sandbox-error').style.display = 'block';
-      document.getElementById('sandbox-error-msg').textContent = 'Could not find root "App" component in App.jsx. Ensure your primary component is named "App" or exported as default.';
+      // No App component found — notify parent silently for BTS repair
+      try {
+        window.parent.postMessage({
+          type: 'SANDBOX_RUNTIME_ERROR',
+          error: { message: 'App component not found. Ensure primary component is named "App".' }
+        }, '*');
+      } catch (e) {}
     }
   </script>
 
   <!-- Explicit Runner with Polling: Guarantees execution even if DOMContentLoaded already fired -->
   <script>
+    // Silent global error capture — postMessage to parent for BTS repair
     window.addEventListener('error', function(e) {
-      var errBox = document.getElementById('sandbox-error');
-      var errMsg = document.getElementById('sandbox-error-msg');
-      if (errBox && errMsg) {
-        errBox.style.display = 'block';
-        errMsg.textContent = (e.message || 'Script error') + '\\n' + (e.error ? e.error.stack : '');
-      }
+      try {
+        window.parent.postMessage({
+          type: 'SANDBOX_RUNTIME_ERROR',
+          error: { message: e.message || 'Script error', stack: e.error ? e.error.stack : '' }
+        }, '*');
+      } catch (err) {}
     });
 
     window.addEventListener('unhandledrejection', function(e) {
-      var errBox = document.getElementById('sandbox-error');
-      var errMsg = document.getElementById('sandbox-error-msg');
-      if (errBox && errMsg) {
-        errBox.style.display = 'block';
-        errMsg.textContent = 'Unhandled Promise Rejection: ' + (e.reason ? (e.reason.message || e.reason) : 'Unknown');
-      }
+      try {
+        window.parent.postMessage({
+          type: 'SANDBOX_RUNTIME_ERROR',
+          error: { message: 'Promise rejection: ' + (e.reason ? (e.reason.message || String(e.reason)) : 'Unknown') }
+        }, '*');
+      } catch (err) {}
     });
 
     function launchAetherCraft() {
@@ -392,13 +370,7 @@ export function buildPreviewDoc(files) {
         var runner = new Function(compiled);
         runner();
       } catch (err) {
-        console.error('AetherCraft Sandbox Compilation Error:', err);
-        var errBox = document.getElementById('sandbox-error');
-        var errMsg = document.getElementById('sandbox-error-msg');
-        if (errBox && errMsg) {
-          errBox.style.display = 'block';
-          errMsg.textContent = (err.name || 'SyntaxError') + ': ' + err.message + '\\n\\n' + (err.stack || '');
-        }
+        console.error('[AetherCraft] Compilation error:', err.message);
         try {
           window.parent.postMessage({
             type: 'SANDBOX_RUNTIME_ERROR',

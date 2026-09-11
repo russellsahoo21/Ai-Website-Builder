@@ -1,174 +1,147 @@
-/**
- * AI Service for OpenRouter API integration
- * Handles streaming generation of full-stack website files
+﻿/**
+ * aiService.js
+ * OpenRouter API integration with:
+ * - React-only enforcement in SYSTEM_PROMPT
+ * - 3-minute connection timeout (free models are slow)
+ * - 60-second stream stall watchdog
+ * - Automatic 429 rate-limit retry (once, after 10s)
  */
 
-export const DEFAULT_MODEL = "openrouter/free";
+export const DEFAULT_MODEL = 'openrouter/free';
 
 export const AVAILABLE_MODELS = [
   {
-    id: "openrouter/free",
-    name: "Auto Free Router (Recommended)",
-    badge: "Instant Queue • Auto Selected",
-    isFree: true
+    id: 'openrouter/free',
+    name: 'Auto Free Router (Recommended)',
+    badge: 'Instant Queue • Auto Selected',
+    isFree: true,
   },
   {
-    id: "google/gemma-4-31b-it:free",
-    name: "Google Gemma 4 31B (Free)",
-    badge: "1.4s Latency • High Speed",
-    isFree: true
+    id: 'google/gemma-4-31b-it:free',
+    name: 'Google Gemma 4 31B (Free)',
+    badge: '1.4s Latency • High Speed',
+    isFree: true,
   },
   {
-    id: "nvidia/nemotron-3.5-lightning:free",
-    name: "NVIDIA Nemotron 3.5 (Free)",
-    badge: "Balanced Reasoning",
-    isFree: true
+    id: 'nvidia/nemotron-3.5-lightning:free',
+    name: 'NVIDIA Nemotron 3.5 (Free)',
+    badge: 'Balanced Reasoning',
+    isFree: true,
   },
   {
-    id: "cohere/north-mini-code:free",
-    name: "Cohere North Mini Code (Free)",
-    badge: "Code Specialist",
-    isFree: true
+    id: 'cohere/north-mini-code:free',
+    name: 'Cohere North Mini Code (Free)',
+    badge: 'Code Specialist',
+    isFree: true,
   },
   {
-    id: "anthropic/claude-3.5-sonnet",
-    name: "Claude 3.5 Sonnet (Paid)",
-    badge: "Frontier Quality",
-    isFree: false
+    id: 'anthropic/claude-3.5-sonnet',
+    name: 'Claude 3.5 Sonnet (Paid)',
+    badge: 'Frontier Quality',
+    isFree: false,
   },
   {
-    id: "openai/gpt-4o",
-    name: "GPT-4o (Paid)",
-    badge: "Multimodal Frontier",
-    isFree: false
-  }
+    id: 'openai/gpt-4o',
+    name: 'GPT-4o (Paid)',
+    badge: 'Multimodal Frontier',
+    isFree: false,
+  },
 ];
 
-const SYSTEM_PROMPT = `You are AetherCraft Engine, an elite full-stack web application architect and React 18 engineering system.
-Your mission is to generate production-grade, visually breathtaking, fully responsive, and interactive React 18 web applications from user prompts.
+const SYSTEM_PROMPT = `You are AetherCraft Engine, an elite React 18 engineering system.
+Your mission: generate production-grade, visually stunning, fully interactive React 18 SPAs.
+Take as much time as needed to produce complete, correct, high-quality code.
 
-APPLICATION ARCHITECTURE & STANDARDS:
-1. Modern React 18 Single-Page Application (SPA):
-   - Output your main application code as "App.jsx".
-   - Use standard React 18 functional components with hooks (useState, useEffect, useMemo, useRef).
-   - Use Tailwind CSS for modern, high-contrast, clean UI styling (dark obsidian/zinc palette, subtle borders, sharp typography).
-   - Use Lucide icons: import { Plus, Trash2, DollarSign, TrendingUp, Filter, Search, ... } from 'lucide-react';
-   - For full-stack features (databases, CRUD, persistent state, expense tracking, authentication simulation), implement robust client-side state with localStorage persistence and mock API helpers so the app is 100% interactive and functional inside the browser sandbox.
-2. Component & Identifier Naming (CRITICAL):
-   - NEVER name a component, function, or variable one of these reserved words: Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server.
-   - Always use domain-specific, compound names instead (e.g. "FilterPanel", "SearchBar", "SaveButton", "TagBadge", "UserProfile", "DatabaseManager").
-3. React Context & Hooks Safety (CRITICAL):
-   - Never call a context hook (e.g. useApp()) inside the component that declares or renders its own <AppContext.Provider>. Calling context outside its provider returns undefined and crashes destructuring.
-   - If using React Context, always initialize React.createContext({ ... }) with realistic default values (e.g. createContext({ user: { name: 'Alex' }, expenses: [] })).
-   - Write self-contained code: Declare all sub-components (Modal, Header, StatCard, Table) in the same App.jsx file.
-
-CRITICAL OUTPUT FORMAT RULES:
-1. NEVER reply with just conversational text, plans, or explanations without the code.
-2. You MUST ALWAYS output the complete working code inside strict file delimiters:
+OUTPUT FORMAT (MANDATORY):
+You MUST ALWAYS wrap your complete code in these exact delimiters:
 
 <<<FILE:App.jsx>>>
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, DollarSign, TrendingUp, Filter, Search } from 'lucide-react';
+import { Plus, Trash2, DollarSign, TrendingUp } from 'lucide-react';
 
 export default function App() {
-  // Complete working React code with state, full interactivity, and Tailwind
   return (
-    <div className="min-h-screen bg-[#090a0f] text-zinc-100 p-6 font-sans">
-      {/* semantic, beautiful components here */}
+    <div className="min-h-screen bg-[#090a0f] text-zinc-100 p-6">
+      {/* complete working UI here */}
     </div>
   );
 }
 <<<END_FILE>>>
 
 <<<FILE:styles.css>>>
-/* Custom animations & design accents */
+/* custom animations */
 <<<END_FILE>>>
 
-3. Provide a brief 1-line friendly summary at the very beginning of what you designed, followed immediately by the files.
-4. Always write complete, working code without placeholders or 'TODO' comments.`;
+CRITICAL RULES:
+1. NEVER output a raw HTML document (<!DOCTYPE html>, <html>, <body>). ALWAYS output React 18 JSX only.
+2. NEVER reply with only explanations or plans — always output the complete code.
+3. NEVER name a component, function, or variable: Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server. Use compound domain-specific names instead (FilterPanel, SearchBar, SaveButton).
+4. React Context: always initialize createContext({ ... }) with realistic defaults. Never call useApp() inside the component that provides AppContext.
+5. All sub-components (Modal, StatCard, Table, Header) must be declared in the same App.jsx file.
+6. Use Tailwind CSS for all styling. Use Lucide icons: import { IconName } from 'lucide-react'.
+7. Implement full interactivity with useState, useEffect, localStorage persistence for any CRUD data.
+8. Provide a 1-sentence description of what you built at the very start, then output the files immediately.
+9. Write complete working code with no TODO comments or placeholder content.`;
 
-/**
- * Parses the raw AI response text and extracts structured files
- */
-export function parseGeneratedFiles(text) {
-  const files = {};
+// --- Internal helpers ---
 
-  const cleanFilename = (raw) => {
-    return raw
-      .replace(/^[#\s*]+/, '')
-      .replace(/^\d+[:.]\s*/, '')
-      .replace(/[*'"`:]/g, '')
-      .trim();
-  };
+import { parseGeneratedFiles } from './fileParser.js';
 
-  const isHtml = (content) => {
-    if (!content || typeof content !== 'string') return false;
-    const trimmed = content.trim().toLowerCase();
-    return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.includes('<!doctype html');
-  };
+function buildFormattedMessages(messages, currentFiles) {
+  const formatted = [{ role: 'system', content: SYSTEM_PROMPT }];
 
-  // 1. Primary: strict or flexible <<<FILE:...>>> delimiters
-  const fileRegex = /<<<FILE:\s*([^\r\n>]+?)\s*>>>([\s\S]*?)(?:<<<END_FILE>>>|$)/g;
-  let match;
-
-  while ((match = fileRegex.exec(text)) !== null) {
-    let filename = cleanFilename(match[1]);
-    const content = match[2].trim();
-    if (content.length > 0) {
-      if ((filename === 'App.jsx' || filename === 'App.js') && isHtml(content)) {
-        filename = 'index.html';
-      }
-      files[filename] = content;
+  if (Object.keys(currentFiles).length > 0) {
+    let ctx = 'Current workspace files (for context):\n';
+    for (const [name, content] of Object.entries(currentFiles)) {
+      ctx += `<<<FILE:${name}>>>\n${content}\n<<<END_FILE>>>\n\n`;
     }
+    ctx += 'When the user requests changes, output the complete updated file(s) inside <<<FILE:...>>> delimiters.';
+    formatted.push({ role: 'system', content: ctx });
   }
 
-  // 2. Fallback: markdown code blocks with headers like "## 1:index.html" or ```html
-  if (Object.keys(files).length === 0) {
-    const mdBlockRegex = /(?:(?:^|\n)(?:#{1,4}|\*\*|File:?)\s*(?:[0-9]+[:.]\s*)?([^\r\n`*]+?\.(?:jsx|js|html|css|tsx|ts))\*?:?\s*\n)?```(?:html|css|javascript|js|jsx|tsx|react)?(?:\s+(?:filename="?([^"\n]+)"?|([\w./-]+)))?\n([\s\S]*?)(?:```|$)/gi;
-    let mdMatch;
-    while ((mdMatch = mdBlockRegex.exec(text)) !== null) {
-      let rawName = mdMatch[1] || mdMatch[2] || mdMatch[3];
-      let filename = rawName ? cleanFilename(rawName) : '';
-      const content = mdMatch[4].trim();
-
-      if (!filename) {
-        if (content.includes('import React') || content.includes('useState') || content.includes('export default function') || content.includes('function App')) {
-          filename = 'App.jsx';
-        } else if (isHtml(content)) {
-          filename = 'index.html';
-        } else if (content.includes('{') && (content.includes('margin') || content.includes('padding') || content.includes('color') || content.includes('@tailwind'))) {
-          filename = 'styles.css';
-        } else {
-          filename = 'App.jsx';
-        }
-      }
-
-      if ((filename === 'App.jsx' || filename === 'App.js') && isHtml(content)) {
-        filename = 'index.html';
-      }
-
-      if (content.length > 20) {
-        files[filename] = content;
+  const REDO_WORDS = ['redo','rebuild','try again','again','restart','regenerate','re-do','fix'];
+  messages.forEach((msg, idx) => {
+    const isLast = idx === messages.length - 1;
+    let content = msg.content;
+    if (isLast && (msg.role === 'user' || !msg.role)) {
+      const lower = content.trim().toLowerCase();
+      if (REDO_WORDS.includes(lower)) {
+        content = `User says: "${msg.content}". Re-synthesize and output the full complete working app inside <<<FILE:App.jsx>>> and <<<END_FILE>>>. React 18 JSX only — NO <!DOCTYPE html>.`;
+      } else {
+        content += '\n\n[INSTRUCTION: Output complete React 18 JSX code inside <<<FILE:App.jsx>>> and <<<END_FILE>>>. Do NOT output <!DOCTYPE html> or raw HTML. React components only.]';
       }
     }
-  }
+    formatted.push({
+      role: msg.role === 'ai' ? 'assistant' : 'user',
+      content,
+    });
+  });
 
-  // 3. Fallback: bare JSX / React code without delimiters or markdown tags
-  if (Object.keys(files).length === 0) {
-    if (text.includes('export default function') || text.includes('function App(') || text.includes('const App =') || text.includes('useState(')) {
-      const startIdx = text.search(/(?:import\s+React|export\s+default\s+function|function\s+App|const\s+App)/);
-      if (startIdx !== -1) {
-        files['App.jsx'] = text.slice(startIdx).trim();
-      }
-    }
-  }
-
-  return files;
+  return formatted;
 }
 
-/**
- * Streams the website generation response from OpenRouter API
- */
+async function fetchStream(apiKey, model, formattedMessages, signal) {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    signal,
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173',
+      'X-Title': 'AetherCraft AI Website Builder',
+    },
+    body: JSON.stringify({
+      model,
+      messages: formattedMessages,
+      stream: true,
+      temperature: 0.7,
+    }),
+  });
+  return res;
+}
+
+// --- Main export ---
+
 export async function streamGenerateWebsite({
   apiKey,
   model = DEFAULT_MODEL,
@@ -178,169 +151,122 @@ export async function streamGenerateWebsite({
   onChunk,
   onFileParsed,
   onComplete,
-  onError
+  onError,
 }) {
   const internalController = new AbortController();
   const effectiveSignal = signal || internalController.signal;
 
-  // Watchdog 1: 45s connection timeout if endpoint doesn't respond
-  let connectionTimeout = setTimeout(() => {
-    internalController.abort(new Error("Connection timed out (45s). The AI provider is heavily queued or unresponsive."));
-  }, 45000);
+  // Connection timeout: 3 minutes (free models can be slow)
+  let connTimeout = setTimeout(() => {
+    internalController.abort(new Error('Connection timed out after 3 minutes.'));
+  }, 180000);
 
-  // Watchdog 2: 30s inactivity timer if streaming stalls mid-response
-  let streamInactivityTimeout = null;
-
-  const resetInactivityWatchdog = () => {
-    if (streamInactivityTimeout) clearTimeout(streamInactivityTimeout);
-    streamInactivityTimeout = setTimeout(() => {
-      internalController.abort(new Error("Stream stalled: no tokens received for 30s."));
-    }, 30000);
+  // Stream stall watchdog: 60 seconds of silence aborts
+  let stallTimeout = null;
+  const resetStallWatchdog = () => {
+    if (stallTimeout) clearTimeout(stallTimeout);
+    stallTimeout = setTimeout(() => {
+      internalController.abort(new Error('Stream stalled — no tokens for 60 seconds.'));
+    }, 60000);
   };
 
-  try {
-    const formattedMessages = [
-      { role: "system", content: SYSTEM_PROMPT }
-    ];
+  const formattedMessages = buildFormattedMessages(messages, currentFiles);
 
-    // If there are existing files in workspace, provide them as context for multi-turn edits
-    if (Object.keys(currentFiles).length > 0) {
-      let contextMsg = "Current workspace files:\n";
-      for (const [name, content] of Object.entries(currentFiles)) {
-        contextMsg += `<<<FILE:${name}>>>\n${content}\n<<<END_FILE>>>\n\n`;
-      }
-      formattedMessages.push({
-        role: "system",
-        content: contextMsg + "\nWhen the user requests modifications or a redo, update the affected files and output the complete working versions with the <<<FILE:...>>> tags."
-      });
+  const attemptStream = async (retryOnRateLimit = true) => {
+    let response;
+    try {
+      response = await fetchStream(apiKey, model, formattedMessages, effectiveSignal);
+    } catch (fetchErr) {
+      throw fetchErr;
     }
 
-    // Append conversation history with smart prompt expansion for short instructions
-    messages.forEach((msg, idx) => {
-      const isLast = idx === messages.length - 1;
-      let content = msg.content;
-      if (isLast && (msg.role === 'user' || !msg.role)) {
-        const lower = content.trim().toLowerCase();
-        if (['redo', 'rebuild', 'try again', 'again', 'restart', 'regenerate', 're-do', 'fix'].includes(lower)) {
-          content = `User instruction: "${msg.content}". Please re-synthesize and output the full, complete working application code inside <<<FILE:App.jsx>>> and <<<END_FILE>>>. Do NOT reply with plans or commentary alone.`;
-        } else {
-          content += "\n\n[Instruction: You MUST output complete, working React 18 code inside <<<FILE:App.jsx>>> and <<<END_FILE>>> delimiters. Do NOT output a raw HTML document (<!DOCTYPE html>) inside App.jsx. Use Lucide icons and Tailwind CSS.]";
-        }
-      }
-      formattedMessages.push({
-        role: msg.role === 'ai' ? 'assistant' : 'user',
-        content: content
-      });
-    });
+    clearTimeout(connTimeout);
 
-    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-      method: "POST",
-      signal: effectiveSignal,
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-        "HTTP-Referer": typeof window !== 'undefined' ? window.location.origin : "http://localhost:5173",
-        "X-Title": "AetherCraft AI Website Builder"
-      },
-      body: JSON.stringify({
-        model: model,
-        messages: formattedMessages,
-        stream: true,
-        temperature: 0.7
-      })
-    });
-
-    clearTimeout(connectionTimeout);
+    // Handle 429 rate limit with one automatic retry
+    if (response.status === 429 && retryOnRateLimit) {
+      await new Promise(r => setTimeout(r, 10000));
+      connTimeout = setTimeout(() => internalController.abort(new Error('Retry timed out.')), 180000);
+      return attemptStream(false);
+    }
 
     if (!response.ok) {
       const errJson = await response.json().catch(() => ({}));
-      throw new Error(errJson.error?.message || `OpenRouter API returned status ${response.status}`);
+      throw new Error(errJson.error?.message || `OpenRouter API error: HTTP ${response.status}`);
     }
 
     const reader = response.body.getReader();
-    const decoder = new TextDecoder("utf-8");
-    let fullText = "";
+    const decoder = new TextDecoder('utf-8');
+    let fullText = '';
 
-    resetInactivityWatchdog();
+    resetStallWatchdog();
 
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
 
-      resetInactivityWatchdog();
-
+      resetStallWatchdog();
       const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split("\n");
+      const lines = chunk.split('\n');
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!trimmed || trimmed === "data: [DONE]") continue;
-
-        if (trimmed.startsWith("data: ")) {
-          try {
-            const data = JSON.parse(trimmed.slice(6));
-            const delta = data.choices?.[0]?.delta?.content || "";
-            if (delta) {
-              fullText += delta;
-              if (onChunk) onChunk(delta, fullText);
-
-              // Continuously parse files as they stream
-              const files = parseGeneratedFiles(fullText);
-              if (Object.keys(files).length > 0 && onFileParsed) {
-                onFileParsed(files);
-              }
+        if (!trimmed || trimmed === 'data: [DONE]') continue;
+        if (!trimmed.startsWith('data: ')) continue;
+        try {
+          const data = JSON.parse(trimmed.slice(6));
+          const delta = data.choices?.[0]?.delta?.content || '';
+          if (delta) {
+            fullText += delta;
+            if (onChunk) onChunk(delta, fullText);
+            const parsed = parseGeneratedFiles(fullText);
+            if (Object.keys(parsed.files).length > 0 && onFileParsed) {
+              onFileParsed(parsed);
             }
-          } catch {
-            // ignore partial JSON parse errors in stream
           }
+        } catch {
+          // ignore partial SSE JSON
         }
       }
     }
 
-    if (streamInactivityTimeout) clearTimeout(streamInactivityTimeout);
+    if (stallTimeout) clearTimeout(stallTimeout);
 
-    const finalFiles = parseGeneratedFiles(fullText);
-    if (onComplete) onComplete(fullText, finalFiles);
-    return { fullText, files: finalFiles };
+    const finalParsed = parseGeneratedFiles(fullText);
+    if (onComplete) onComplete(fullText, finalParsed);
+    return { fullText, ...finalParsed };
+  };
 
+  try {
+    return await attemptStream(true);
   } catch (error) {
-    if (connectionTimeout) clearTimeout(connectionTimeout);
-    if (streamInactivityTimeout) clearTimeout(streamInactivityTimeout);
+    if (connTimeout) clearTimeout(connTimeout);
+    if (stallTimeout) clearTimeout(stallTimeout);
 
-    const isAbort = error.name === 'AbortError' || effectiveSignal.aborted;
-    const msg = isAbort 
-      ? "Generation cancelled or provider timed out. You can retry with a different model from Settings."
-      : error.message;
+    const isAbort = error.name === 'AbortError' || effectiveSignal?.aborted;
+    const msg = isAbort ? 'AbortError: cancelled' : error.message;
 
-    console.error("AI Generation Error:", msg);
+    console.error('[AetherCraft AI]', msg);
     if (onError) onError(new Error(msg));
     throw error;
   }
 }
 
-/**
- * Test OpenRouter API Key connection
- */
 export async function testOpenRouterConnection(apiKey, model = DEFAULT_MODEL) {
-  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    method: "POST",
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: model,
-      messages: [
-        { role: "user", content: "Ping. Respond with 'Connection Successful'." }
-      ]
-    })
+      model,
+      messages: [{ role: 'user', content: "Ping. Respond with 'Connection Successful'." }],
+    }),
   });
-
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error?.message || `HTTP ${response.status}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error?.message || `HTTP ${res.status}`);
   }
-
-  const data = await response.json();
-  return data.choices?.[0]?.message?.content || "Connected";
+  const data = await res.json();
+  return data.choices?.[0]?.message?.content || 'Connected';
 }
