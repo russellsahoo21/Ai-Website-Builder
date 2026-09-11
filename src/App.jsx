@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import LandingPage from './pages/LandingPage';
@@ -13,6 +13,7 @@ import ChatPanel from './components/ChatPanel';
 import PreviewPanel from './components/PreviewPanel';
 import CodeInspector from './components/CodeInspector';
 import SettingsModal from './components/SettingsModal';
+import ProjectsModal from './components/ProjectsModal';
 import { useUser, useClerk } from '@clerk/react';
 import { DEFAULT_MODEL, AVAILABLE_MODELS } from './services/aiService';
 import { useGeneration } from './hooks/useGeneration';
@@ -20,6 +21,17 @@ import { useSandboxMessages } from './hooks/useSandboxMessages';
 import { STARTER_TEMPLATES } from './templates/starterTemplates';
 import { downloadProjectZip } from './utils/zipExporter';
 import { buildPreviewDoc } from './utils/previewBuilder';
+import { 
+  getAllProjects, 
+  getProjectById, 
+  saveProject, 
+  createNewProject, 
+  deleteProject, 
+  duplicateProject, 
+  getActiveProjectId, 
+  setActiveProjectId, 
+  deriveProjectName 
+} from './services/projectService';
 
 function getRouteFromHash() {
   const hash = window.location.hash.replace('#/', '').replace('#', '');
@@ -38,6 +50,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('preview');
   const [viewport, setViewport] = useState('desktop');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // — Configuration —
@@ -51,12 +64,56 @@ export default function App() {
     return import.meta.env.VITE_DEFAULT_MODEL || DEFAULT_MODEL;
   });
 
-  // — Workspace state —
-  const [files, setFiles] = useState({});
-  const [messages, setMessages] = useState([]);
+  // — Project Management & History State —
+  const [projects, setProjects] = useState(() => getAllProjects());
+  const [activeProjectId, setActiveProjectIdState] = useState(() => {
+    const savedId = getActiveProjectId();
+    const all = getAllProjects();
+    if (savedId && all.some(p => p.id === savedId)) return savedId;
+    return all.length > 0 ? all[0].id : null;
+  });
+
+  // — Workspace state initialized from Active Project —
+  const [files, setFiles] = useState(() => {
+    const all = getAllProjects();
+    const savedId = getActiveProjectId();
+    const active = all.find(p => p.id === savedId) || all[0];
+    return active?.files || {};
+  });
+
+  const [messages, setMessages] = useState(() => {
+    const all = getAllProjects();
+    const savedId = getActiveProjectId();
+    const active = all.find(p => p.id === savedId) || all[0];
+    return active?.messages || [];
+  });
+
   const [isGenerating, setIsGenerating] = useState(false);
 
-  // Stable refs for hooks (avoids stale closure bugs)
+  // Auto-save active project changes to localStorage (debounced)
+  useEffect(() => {
+    if (!activeProjectId) return;
+    const currentProj = projects.find(p => p.id === activeProjectId);
+    if (!currentProj) return;
+
+    const hasFiles = Object.keys(files).length > 0;
+    if (!hasFiles && messages.length === 0) return;
+
+    const timer = setTimeout(() => {
+      const updated = saveProject({
+        ...currentProj,
+        files,
+        messages
+      });
+      if (updated) {
+        setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
+      }
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [files, messages, activeProjectId]);
+
+  // Stable refs for hooks
   const filesRef = useRef(files);
   const messagesRef = useRef(messages);
   const apiKeyRef = useRef(apiKey);
@@ -69,7 +126,7 @@ export default function App() {
 
   const onRefresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
 
-  // — Generation hook (all AI streaming + BTS auto-fix logic) —
+  // — Generation hook —
   const { handleSendMessage, handleCancelGeneration, executeAutoFix } = useGeneration({
     apiKey,
     selectedModel,
@@ -112,14 +169,77 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // — Studio actions —
+  // — Project Library Actions —
+  const handleSelectProject = (project) => {
+    setActiveProjectIdState(project.id);
+    setActiveProjectId(project.id);
+    setFiles(project.files || {});
+    setMessages(project.messages || []);
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleCreateNewProject = (initialName = 'New Project', initialPrompt = '') => {
+    const newProj = createNewProject({
+      name: initialName,
+      prompt: initialPrompt,
+      files: {},
+      messages: []
+    });
+    setProjects(getAllProjects());
+    setActiveProjectIdState(newProj.id);
+    setActiveProjectId(newProj.id);
+    setFiles({});
+    setMessages([]);
+    setRefreshTrigger(prev => prev + 1);
+    return newProj;
+  };
+
+  const handleDeleteProject = (id) => {
+    const remaining = deleteProject(id);
+    setProjects(remaining);
+    if (activeProjectId === id) {
+      if (remaining.length > 0) {
+        handleSelectProject(remaining[0]);
+      } else {
+        handleCreateNewProject();
+      }
+    }
+  };
+
+  const handleDuplicateProject = (id) => {
+    const cloned = duplicateProject(id);
+    if (cloned) {
+      setProjects(getAllProjects());
+      handleSelectProject(cloned);
+    }
+  };
+
+  // — Studio message sender —
   const onSendMessage = useCallback(async (prompt) => {
     if (!apiKey) { setIsSettingsOpen(true); return; }
+
+    // If current project has a generic name and empty prompt, update its title with the user prompt
+    const currentProj = projects.find(p => p.id === activeProjectId);
+    if (currentProj && (currentProj.name === 'New Project' || currentProj.name === 'Untitled Project')) {
+      const derived = deriveProjectName(prompt);
+      saveProject({ ...currentProj, name: derived, prompt });
+      setProjects(getAllProjects());
+    }
+
     await handleSendMessage(prompt);
-  }, [apiKey, handleSendMessage]);
+  }, [apiKey, handleSendMessage, projects, activeProjectId]);
 
   const handleLoadTemplate = (template) => {
-    setFiles(template.files);
+    const newProj = createNewProject({
+      name: template.name,
+      prompt: template.tagline || template.description,
+      files: template.files || {},
+      messages: [{ role: 'ai', content: `Template loaded: "${template.name}". Inspect code or submit instructions to refine.` }]
+    });
+    setProjects(getAllProjects());
+    setActiveProjectIdState(newProj.id);
+    setActiveProjectId(newProj.id);
+    setFiles(template.files || {});
     setMessages([{ role: 'ai', content: `Template loaded: "${template.name}". Inspect code or submit instructions to refine.` }]);
     if (!isSignedIn) { clerk.openSignIn(); return; }
     navigateTo('studio');
@@ -127,9 +247,7 @@ export default function App() {
   };
 
   const handleClearWorkspace = () => {
-    setFiles({});
-    setMessages([]);
-    setRefreshTrigger(prev => prev + 1);
+    handleCreateNewProject('New Project', '');
   };
 
   const handleFileUpdate = (filename, newContent) => {
@@ -160,11 +278,22 @@ export default function App() {
 
   const handleLaunchWithPrompt = (promptText) => {
     if (!isSignedIn) { clerk.openSignIn(); return; }
+    const newProj = createNewProject({
+      name: deriveProjectName(promptText),
+      prompt: promptText,
+      files: {},
+      messages: []
+    });
+    setProjects(getAllProjects());
+    setActiveProjectIdState(newProj.id);
+    setActiveProjectId(newProj.id);
     setFiles({});
     setMessages([]);
     navigateTo('studio');
     setTimeout(() => onSendMessage(promptText), 150);
   };
+
+  const activeProject = projects.find(p => p.id === activeProjectId);
 
   // ── Studio View ──────────────────────────────────────────────────────────
   if (currentRoute === 'studio' && isSignedIn) {
@@ -177,8 +306,11 @@ export default function App() {
           setViewport={setViewport}
           onRefresh={() => setRefreshTrigger(prev => prev + 1)}
           onOpenNewTab={handleOpenNewTab}
-          onDownloadZip={() => downloadProjectZip(files, 'aethercraft-app')}
+          onDownloadZip={() => downloadProjectZip(files, activeProject?.name || 'aethercraft-app')}
           onOpenSettings={() => setIsSettingsOpen(true)}
+          onOpenProjects={() => setIsProjectsModalOpen(true)}
+          projectCount={projects.length}
+          activeProjectName={activeProject?.name || ''}
           onBackToHome={() => navigateTo('landing')}
           isGenerating={isGenerating}
         />
@@ -223,6 +355,17 @@ export default function App() {
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
         />
+
+        <ProjectsModal
+          isOpen={isProjectsModalOpen}
+          onClose={() => setIsProjectsModalOpen(false)}
+          projects={projects}
+          activeProjectId={activeProjectId}
+          onSelectProject={handleSelectProject}
+          onCreateNewProject={() => handleCreateNewProject('New Project', '')}
+          onDeleteProject={handleDeleteProject}
+          onDuplicateProject={handleDuplicateProject}
+        />
       </div>
     );
   }
@@ -230,11 +373,20 @@ export default function App() {
   // ── Public Pages ─────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col bg-[#090a0d] text-zinc-100 font-sans">
-      <Navigation currentRoute={currentRoute} navigateTo={navigateTo} />
+      <Navigation 
+        currentRoute={currentRoute} 
+        navigateTo={navigateTo} 
+        onOpenProjects={() => setIsProjectsModalOpen(true)}
+        projectCount={projects.length}
+      />
 
       <main className="flex-1">
         {currentRoute === 'landing' && (
-          <LandingPage navigateTo={navigateTo} onLaunchWithPrompt={handleLaunchWithPrompt} onLoadTemplate={handleLoadTemplate} />
+          <LandingPage 
+            navigateTo={navigateTo} 
+            onLaunchWithPrompt={handleLaunchWithPrompt} 
+            onLoadTemplate={handleLoadTemplate} 
+          />
         )}
         {currentRoute === 'templates' && (
           <TemplatesPage onLoadTemplate={handleLoadTemplate} navigateTo={navigateTo} />
@@ -257,6 +409,23 @@ export default function App() {
         setApiKey={setApiKey}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
+      />
+
+      <ProjectsModal
+        isOpen={isProjectsModalOpen}
+        onClose={() => setIsProjectsModalOpen(false)}
+        projects={projects}
+        activeProjectId={activeProjectId}
+        onSelectProject={(project) => {
+          handleSelectProject(project);
+          navigateTo('studio');
+        }}
+        onCreateNewProject={() => {
+          handleCreateNewProject('New Project', '');
+          navigateTo('studio');
+        }}
+        onDeleteProject={handleDeleteProject}
+        onDuplicateProject={handleDuplicateProject}
       />
     </div>
   );

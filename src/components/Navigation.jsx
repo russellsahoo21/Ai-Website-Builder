@@ -1,8 +1,8 @@
 import React from 'react';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, FolderKanban } from 'lucide-react';
 import { useUser, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 
-export default function Navigation({ currentRoute, navigateTo }) {
+export default function Navigation({ currentRoute, navigateTo, onOpenProjects, projectCount = 0 }) {
   const { isSignedIn, isLoaded } = useUser();
 
   return (
@@ -97,13 +97,29 @@ export default function Navigation({ currentRoute, navigateTo }) {
               </button>
             </SignUpButton>
           ) : (
-            <button
-              onClick={() => navigateTo('studio')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-medium tracking-tight transition"
-            >
-              <span>Launch Studio</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={onOpenProjects}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs font-medium text-zinc-300 hover:text-white transition border border-zinc-800"
+                title="View All Projects"
+              >
+                <FolderKanban className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Projects</span>
+                {projectCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-zinc-800 text-[10px] text-zinc-400 font-mono">
+                    {projectCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => navigateTo('studio')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-medium tracking-tight transition"
+              >
+                <span>Studio</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           )}
         </div>
       </div>

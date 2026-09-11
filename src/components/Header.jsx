@@ -9,7 +9,8 @@ import {
   ExternalLink, 
   RotateCcw, 
   Settings2,
-  ArrowLeft
+  ArrowLeft,
+  FolderKanban
 } from 'lucide-react';
 
 export default function Header({
@@ -21,6 +22,9 @@ export default function Header({
   onOpenNewTab,
   onDownloadZip,
   onOpenSettings,
+  onOpenProjects,
+  projectCount = 0,
+  activeProjectName = '',
   onBackToHome,
   isGenerating
 }) {
@@ -45,6 +49,23 @@ export default function Header({
           </div>
           <span className="font-semibold text-xs tracking-tight text-white hidden md:inline">AetherCraft Studio</span>
         </div>
+
+        <div className="h-3.5 w-px bg-zinc-800 hidden sm:block"></div>
+
+        {/* Projects Library Button */}
+        <button
+          onClick={onOpenProjects}
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-900 hover:bg-zinc-800 text-xs font-medium text-zinc-300 hover:text-white transition border border-zinc-800 group"
+          title="View and Switch Previous Projects"
+        >
+          <FolderKanban className="w-3.5 h-3.5 text-cyan-400 group-hover:scale-105 transition" />
+          <span className="hidden sm:inline">Projects</span>
+          {projectCount > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full bg-zinc-800 border border-zinc-700/60 text-[10px] text-zinc-400 font-mono">
+              {projectCount}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* View Mode & Viewport Switchers */}
