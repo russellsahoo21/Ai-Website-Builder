@@ -55,7 +55,7 @@ Take as much time as needed to produce complete, correct, high-quality code.
 OUTPUT FORMAT (MANDATORY):
 You MUST ALWAYS wrap your complete code in these exact delimiters:
 
-<<<FILE:components/Navbar.jsx>>>
+<<<FILE:src/components/Navbar.jsx>>>
 import React from 'react';
 import { Compass, Sparkles } from 'lucide-react';
 
@@ -71,7 +71,7 @@ export default function Navbar({ activeTab, onSelectTab }) {
 }
 <<<END_FILE>>>
 
-<<<FILE:App.jsx>>>
+<<<FILE:src/App.jsx>>>
 import React, { useState, useEffect } from 'react';
 import Navbar from './components/Navbar';
 import { Plus, Trash2, DollarSign, TrendingUp } from 'lucide-react';
@@ -88,7 +88,7 @@ export default function App() {
 }
 <<<END_FILE>>>
 
-<<<FILE:styles.css>>>
+<<<FILE:src/index.css>>>
 /* custom animations & keyframes */
 <<<END_FILE>>>
 
@@ -96,9 +96,11 @@ CRITICAL RULES:
 1. NEVER output a raw HTML document (<!DOCTYPE html>, <html>, <body>). ALWAYS output React 18 JSX only.
 2. NEVER reply with only explanations or plans — always output the complete code files.
 3. MODULAR ARCHITECTURE (CRITICAL):
-   Organize applications modularly across multiple component files (e.g. components/Navbar.jsx, components/Sidebar.jsx, components/Gallery.jsx, components/Modal.jsx, App.jsx, styles.css).
-   - Breaking code into separate component files keeps code readable, isolated, and easy to debug.
-   - All exported components in components/ are automatically available throughout the application.
+   Organize applications modularly across standard React + Vite directory structure:
+   - Primary component in src/App.jsx
+   - Global styles in src/index.css
+   - Sub-components inside src/components/ (e.g. src/components/Navbar.jsx, src/components/Sidebar.jsx, src/components/Card.jsx)
+   - All exported components in src/components/ are automatically available throughout the application.
 4. COMPONENT & IDENTIFIER NAMING:
    NEVER name a component, function, or variable: Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server. Use compound domain-specific names instead (FilterPanel, SearchBar, SaveButton, TagBadge).
 5. REACT CONTEXT & HOOKS SAFETY:
@@ -132,9 +134,9 @@ function buildFormattedMessages(messages, currentFiles) {
     if (isLast && (msg.role === 'user' || !msg.role)) {
       const lower = content.trim().toLowerCase();
       if (REDO_WORDS.includes(lower)) {
-        content = `User says: "${msg.content}". Re-synthesize and output the full complete working app inside <<<FILE:App.jsx>>> and <<<END_FILE>>>. React 18 JSX only — NO <!DOCTYPE html>.`;
+        content = `User says: "${msg.content}". Re-synthesize and output the full complete working app inside <<<FILE:src/App.jsx>>> and <<<END_FILE>>>. React 18 JSX only — NO <!DOCTYPE html>.`;
       } else {
-        content += '\n\n[INSTRUCTION: Output complete React 18 JSX code inside <<<FILE:App.jsx>>> and <<<END_FILE>>>. Do NOT output <!DOCTYPE html> or raw HTML. React components only.]';
+        content += '\n\n[INSTRUCTION: Output complete React 18 JSX code inside <<<FILE:src/App.jsx>>> and <<<END_FILE>>>. Do NOT output <!DOCTYPE html> or raw HTML. React components only.]';
       }
     }
     formatted.push({

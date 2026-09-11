@@ -76,7 +76,8 @@ export function useGeneration({
 
     const currentFiles = filesRef.current;
     const currentMessages = messagesRef.current;
-    const fixPrompt = buildFixPrompt(rawErrorMsg, currentFiles['App.jsx'] || '');
+    const currentAppCode = currentFiles['src/App.jsx'] || currentFiles['App.jsx'] || '';
+    const fixPrompt = buildFixPrompt(rawErrorMsg, currentAppCode);
 
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();

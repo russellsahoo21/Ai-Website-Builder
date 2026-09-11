@@ -1,10 +1,13 @@
-﻿/**
+/**
  * projectService.js
  * Manages persistent storage, retrieval, creation, and management
  * of user projects in localStorage.
  */
 
 import { STARTER_TEMPLATES } from '../templates/starterTemplates.js';
+import { ensureStandardReactStructure } from '../utils/projectStructure.js';
+
+export { ensureStandardReactStructure };
 
 const STORAGE_KEY = 'aethercraft_saved_projects';
 const ACTIVE_ID_KEY = 'aethercraft_active_project_id';
@@ -30,7 +33,7 @@ export function getAllProjects() {
         id: `seeded_${tmpl.id}`,
         name: tmpl.name,
         prompt: tmpl.tagline || tmpl.description,
-        files: tmpl.files || {},
+        files: ensureStandardReactStructure(tmpl.files || {}),
         messages: [
           { role: 'ai', content: `Starter template "${tmpl.name}" ready to inspect and customize.` }
         ],
@@ -42,7 +45,28 @@ export function getAllProjects() {
       return seeded;
     }
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    
+    // Automatically upgrade any legacy flat project to standard React structure
+    let hasUpgrades = false;
+    const upgraded = parsed.map(p => {
+      const hasFlat = p.files && (p.files['App.jsx'] || p.files['styles.css'] || !p.files['src/App.jsx']);
+      if (hasFlat) {
+        hasUpgrades = true;
+        const normalizedFiles = ensureStandardReactStructure(p.files || {});
+        return {
+          ...p,
+          files: normalizedFiles,
+          fileCount: Object.keys(normalizedFiles).length
+        };
+      }
+      return p;
+    });
+
+    if (hasUpgrades) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(upgraded));
+    }
+    return upgraded;
   } catch (err) {
     console.error('Failed to load projects from storage:', err);
     return [];
@@ -99,15 +123,16 @@ export function saveProject(project) {
 export function createNewProject({ name, prompt = '', files = {}, messages = [] } = {}) {
   const id = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const finalName = name || deriveProjectName(prompt) || 'New Project';
+  const structuredFiles = ensureStandardReactStructure(files || {});
   const newProj = {
     id,
     name: finalName,
     prompt: prompt || 'Custom application project',
-    files: files || {},
+    files: structuredFiles,
     messages: messages || [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    fileCount: Object.keys(files || {}).length
+    fileCount: Object.keys(structuredFiles).length
   };
 
   const all = getAllProjects();

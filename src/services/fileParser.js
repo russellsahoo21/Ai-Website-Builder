@@ -1,4 +1,4 @@
-﻿/**
+/**
  * fileParser.js
  * Hardened AI response parser. Handles all output formats:
  * 1. <<<FILE:...>>> delimiters (primary)
@@ -24,21 +24,29 @@ function cleanFilename(raw) {
   return cleaned;
 }
 
+function normalizeFilePath(name) {
+  if (!name) return 'src/App.jsx';
+  if (name === 'App.jsx' || name === 'App.js') return 'src/App.jsx';
+  if (name === 'styles.css' || name === 'style.css' || name === 'src/styles.css') return 'src/index.css';
+  if (name.startsWith('components/') || name.startsWith('hooks/') || name.startsWith('utils/')) return `src/${name}`;
+  return name;
+}
+
 function classifyContent(content) {
-  if (!content) return 'App.jsx';
+  if (!content) return 'src/App.jsx';
   if (isHtmlDocument(content)) return 'index.html';
   if (
     content.includes('import React') ||
     content.includes('useState') ||
     content.includes('export default function') ||
     content.includes('function App')
-  ) return 'App.jsx';
+  ) return 'src/App.jsx';
   if (
     content.includes('{') &&
     (content.includes('margin') || content.includes('padding') ||
      content.includes('@tailwind') || content.includes('color:'))
-  ) return 'styles.css';
-  return 'App.jsx';
+  ) return 'src/index.css';
+  return 'src/App.jsx';
 }
 
 /**
@@ -54,7 +62,7 @@ export function parseGeneratedFiles(text) {
   const fileRegex = /<<<FILE:\s*([^\r\n>]+?)\s*>>>([\s\S]*?)(?:<<<END_FILE>>>|$)/g;
   let match;
   while ((match = fileRegex.exec(text)) !== null) {
-    const name = cleanFilename(match[1]);
+    const name = normalizeFilePath(cleanFilename(match[1]));
     const content = match[2].trim();
     if (name && content.length >= MIN_CONTENT_LENGTH) {
       raw[name] = content;
@@ -66,7 +74,7 @@ export function parseGeneratedFiles(text) {
     const toolRegex = /(?:\[\s*)?write\s*\(\s*(?:file|filename|path)\s*=\s*['"]([^'"]+)['"]\s*,\s*(?:content\s*=\s*)?['"]([\s\S]*?)['"]\s*\)(?:\s*\])?/gi;
     let toolMatch;
     while ((toolMatch = toolRegex.exec(text)) !== null) {
-      const name = cleanFilename(toolMatch[1]);
+      const name = normalizeFilePath(cleanFilename(toolMatch[1]));
       let content = toolMatch[2]
         .replace(/\\n/g, '\n')
         .replace(/\\t/g, '  ')
@@ -85,7 +93,7 @@ export function parseGeneratedFiles(text) {
     while ((m = mdRe.exec(text)) !== null) {
       const rawName = m[1] || m[2] || m[3];
       const content = m[4].trim();
-      const name = rawName ? cleanFilename(rawName) : classifyContent(content);
+      const name = normalizeFilePath(rawName ? cleanFilename(rawName) : classifyContent(content));
       if (name && content.length >= MIN_CONTENT_LENGTH) {
         raw[name] = content;
       }
@@ -100,7 +108,7 @@ export function parseGeneratedFiles(text) {
     if (start !== -1) {
       const content = text.slice(start).trim();
       if (content.length >= MIN_CONTENT_LENGTH) {
-        raw['App.jsx'] = content;
+        raw['src/App.jsx'] = content;
       }
     }
   }

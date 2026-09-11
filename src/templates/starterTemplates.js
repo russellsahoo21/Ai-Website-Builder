@@ -1,7 +1,9 @@
 /**
  * Production-ready templates showcasing instant capabilities
  */
-export const STARTER_TEMPLATES = [
+import { ensureStandardReactStructure } from '../utils/projectStructure.js';
+
+const RAW_TEMPLATES = [
   {
     id: "react-expense-tracker",
     name: "Apex Ledger - React Expense Tracker",
@@ -1048,3 +1050,9 @@ document.getElementById('add-to-cart-btn')?.addEventListener('click', () => {
     }
   }
 ];
+
+export const STARTER_TEMPLATES = RAW_TEMPLATES.map(tmpl => ({
+  ...tmpl,
+  files: ensureStandardReactStructure(tmpl.files || {}, tmpl.name)
+}));
+

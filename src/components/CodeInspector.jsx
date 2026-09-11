@@ -1,4 +1,4 @@
-﻿import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   FileCode, 
   Folder, 
@@ -61,9 +61,15 @@ function getLanguageLabel(filename) {
 
 export default function CodeInspector({ files = {}, onFileUpdate, onFileCreate, onFileDelete }) {
   const fileNames = Object.keys(files);
-  const [activeFile, setActiveFile] = useState(fileNames[0] || 'App.jsx');
+  const defaultAppFile = fileNames.includes('src/App.jsx') 
+    ? 'src/App.jsx' 
+    : fileNames.includes('App.jsx') 
+    ? 'App.jsx' 
+    : fileNames[0] || 'src/App.jsx';
+
+  const [activeFile, setActiveFile] = useState(defaultAppFile);
   const [openTabs, setOpenTabs] = useState(() => {
-    return fileNames.length > 0 ? [fileNames[0]] : ['App.jsx'];
+    return fileNames.length > 0 ? [defaultAppFile] : ['src/App.jsx'];
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -79,7 +85,11 @@ export default function CodeInspector({ files = {}, onFileUpdate, onFileCreate, 
   // Synchronize active file if files change
   useEffect(() => {
     if (fileNames.length > 0 && !files[activeFile]) {
-      const fallback = fileNames.includes('App.jsx') ? 'App.jsx' : fileNames[0];
+      const fallback = fileNames.includes('src/App.jsx') 
+        ? 'src/App.jsx' 
+        : fileNames.includes('App.jsx') 
+        ? 'App.jsx' 
+        : fileNames[0];
       setActiveFile(fallback);
       if (!openTabs.includes(fallback)) {
         setOpenTabs(prev => [...prev, fallback]);

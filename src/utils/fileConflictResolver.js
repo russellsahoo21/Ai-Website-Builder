@@ -1,4 +1,4 @@
-﻿/**
+/**
  * fileConflictResolver.js
  * Detects file type conflicts and enforces React-only output.
  * HTML content in App.jsx triggers re-generation, never renders.
@@ -50,7 +50,7 @@ export function resolveFileConflicts(rawFiles) {
     if (isHtml) {
       if (isReactComponent(content) && !isHtmlDocument(content)) {
         // JSX was accidentally placed in index.html — promote it
-        files['App.jsx'] = content;
+        files['src/App.jsx'] = content;
       } else {
         // HTML-only app — flag for React re-gen
         needsReactConversion = true;

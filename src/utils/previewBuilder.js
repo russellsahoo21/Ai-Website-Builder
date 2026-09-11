@@ -29,9 +29,9 @@ export function buildPreviewDoc(files) {
     delete workingFiles['App.js'];
   }
 
-  const reactCode = workingFiles['App.jsx'] || workingFiles['App.js'] || workingFiles['src/App.jsx'] || workingFiles['app.jsx'] || '';
+  const reactCode = workingFiles['src/App.jsx'] || workingFiles['App.jsx'] || workingFiles['App.js'] || workingFiles['app.jsx'] || '';
   const isReact = Boolean(reactCode && !isHtmlDoc(reactCode));
-  const css = workingFiles['styles.css'] || workingFiles['src/styles.css'] || workingFiles['src/index.css'] || '';
+  const css = workingFiles['src/index.css'] || workingFiles['styles.css'] || workingFiles['src/styles.css'] || '';
   let html = workingFiles['index.html'] || '';
 
   // 1. Handle React 18 Applications
@@ -64,13 +64,21 @@ export function buildPreviewDoc(files) {
       return cl;
     }
 
-    const appFileKey = ['App.jsx', 'App.js', 'src/App.jsx', 'app.jsx', 'src/App.js'].find(k => workingFiles[k]);
+    const appFileKey = ['src/App.jsx', 'App.jsx', 'App.js', 'app.jsx', 'src/App.js'].find(k => workingFiles[k]);
     const userDeclaredNames = new Set();
     const jsxTagsSet = new Set();
 
-    // Process all modular sub-components (e.g. components/Navbar.jsx, components/Gallery.jsx, utils/helpers.js)
+    const IGNORED_SUB_FILES = new Set([
+      'main.jsx', 'main.js', 'src/main.jsx', 'src/main.js',
+      'vite.config.js', 'vite.config.ts', 'tailwind.config.js',
+      'postcss.config.js', 'package.json'
+    ]);
+
+    // Process all modular sub-components (e.g. src/components/Navbar.jsx, components/Gallery.jsx, utils/helpers.js)
     const subComponentFiles = Object.entries(workingFiles).filter(([name, code]) => {
       if (name === appFileKey) return false;
+      if (IGNORED_SUB_FILES.has(name)) return false;
+      if (name.includes('vite.config') || name.includes('postcss.config') || name.includes('tailwind.config')) return false;
       if (!code || typeof code !== 'string') return false;
       const lower = name.toLowerCase();
       return (lower.endsWith('.jsx') || lower.endsWith('.tsx') || lower.endsWith('.js')) && !isHtmlDoc(code);

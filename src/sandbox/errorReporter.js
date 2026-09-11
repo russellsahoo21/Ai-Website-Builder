@@ -90,7 +90,7 @@ export function buildFixPrompt(rawError, currentCode) {
       'Fix this error: ' + rawError + '\n\n' +
       'Rename any component that uses a reserved word (Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server) ' +
       'to a compound domain-specific name (e.g. FilterPanel, SearchBar). ' +
-      'Return the complete corrected App.jsx inside <<<FILE:App.jsx>>> and <<<END_FILE>>>.'
+      'Return the complete corrected src/App.jsx inside <<<FILE:src/App.jsx>>> and <<<END_FILE>>>.'
     );
   }
 
@@ -98,15 +98,15 @@ export function buildFixPrompt(rawError, currentCode) {
     return (
       'The previous output was a raw HTML document. ' +
       'Convert it into a fully functional React 18 component using Tailwind CSS and Lucide icons. ' +
-      'Return the complete App.jsx inside <<<FILE:App.jsx>>> and <<<END_FILE>>>. ' +
+      'Return the complete src/App.jsx inside <<<FILE:src/App.jsx>>> and <<<END_FILE>>>. ' +
       'Do NOT output <!DOCTYPE html> or <html> tags.'
     );
   }
 
   return (
-    'Fix this runtime error in App.jsx: "' + rawError + '"\n\n' +
+    'Fix this runtime error in src/App.jsx: "' + rawError + '"\n\n' +
     'Ensure all context hooks have safe defaults, no component names shadow globals, ' +
     'and all referenced variables are declared. ' +
-    'Return the complete corrected App.jsx inside <<<FILE:App.jsx>>> and <<<END_FILE>>>.'
+    'Return the complete corrected src/App.jsx inside <<<FILE:src/App.jsx>>> and <<<END_FILE>>>.'
   );
 }
