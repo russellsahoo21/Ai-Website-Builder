@@ -393,7 +393,7 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
               <div className="text-3xl font-bold text-white mb-3">$0</div>
               <p className="text-xs text-zinc-400 mb-6 font-light">For prototyping personal ideas.</p>
               <ul className="space-y-2.5 text-xs text-zinc-300 mb-8 font-light">
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> Unlimited generations</li>
+                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> 5 free generations</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> In-memory live sandbox</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> 1-Click ZIP export</li>
               </ul>
@@ -423,7 +423,7 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
               </div>
               <p className="text-xs text-zinc-400 mb-6 font-light">For indie makers shipping commercial products.</p>
               <ul className="space-y-2.5 text-xs text-zinc-200 mb-8 font-light">
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white" /> Everything in Free</li>
+                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white" /> Unlimited generations</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white" /> Priority synthesis speed</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white" /> Custom domain publishing</li>
                 <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white" /> Multi-turn architectural memory</li>
@@ -452,12 +452,12 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
               </ul>
             </div>
 
-            <button
-              onClick={() => navigateTo('checkout', { plan: 'team', cycle: billingCycle })}
-              className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition cursor-pointer"
+            <a
+              href="mailto:sales@aethercraft.io?subject=Inquiry%20about%20Team%20Workspace%20Plan"
+              className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition cursor-pointer text-center block"
             >
               Contact Team Sales
-            </button>
+            </a>
           </div>
         </div>
       </section>

@@ -28,34 +28,15 @@ export const CHECKOUT_PLANS = {
     annualPriceUSD: 16, // per month ($192/year)
     monthlyPriceINR: 1599,
     annualPriceINR: 1299, // per month (₹15,588/year)
-    badge: 'Most Popular',
+    badge: 'Pro Subscription',
     features: [
-      'Everything in Free',
+      'Unlimited generations',
       'Priority synthesis queue & 2x speed',
       'Custom domain publishing with auto-SSL',
       'Multi-turn architectural memory',
       'Unlimited saved projects',
       'Full React 18 + Vite export suite',
       'Priority email & Discord engineering support'
-    ]
-  },
-  team: {
-    id: 'team',
-    name: 'Team Workspace',
-    tagline: 'For agencies and digital teams.',
-    monthlyPriceUSD: 49,
-    annualPriceUSD: 40, // per month ($480/year)
-    monthlyPriceINR: 3999,
-    annualPriceINR: 3299, // per month (₹39,588/year)
-    badge: 'Best for Teams',
-    features: [
-      'Everything in Pro Founder',
-      '5 team member seats included',
-      'Shared team workspace & instant sync',
-      'White-label export options (zero watermarks)',
-      'Shared custom API keys & team pool',
-      'Dedicated Slack channel & SLA support',
-      'Centralized billing & invoice management'
     ]
   }
 };
@@ -388,19 +369,19 @@ export default function CheckoutPage({
           {/* LEFT 7 COLS: Plan selector & Billing info */}
           <div className="lg:col-span-7 space-y-8">
             
-            {/* Step 1: Select Plan & Cadence */}
+            {/* Step 1: Subscription Cadence */}
             <section className="bg-[#0d0f14] border border-zinc-800 rounded-2xl p-6 shadow-sm">
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
                 <div>
-                  <h2 className="text-base font-semibold text-white">1. Select Plan & Cadence</h2>
-                  <p className="text-xs text-zinc-400 font-light mt-0.5">Switch between tiers or change your billing interval.</p>
+                  <h2 className="text-base font-semibold text-white">1. Subscription Cadence</h2>
+                  <p className="text-xs text-zinc-400 font-light mt-0.5">Select monthly or discounted annual billing for Pro Founder.</p>
                 </div>
 
                 {/* Monthly / Annual Toggle */}
-                <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-1 text-xs">
+                <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-1 text-xs self-start sm:self-auto">
                   <button
                     onClick={() => setBillingCycle('monthly')}
-                    className={`px-3 py-1.5 rounded-md font-medium transition ${
+                    className={`px-3 py-1.5 rounded-md font-medium transition cursor-pointer ${
                       billingCycle === 'monthly' ? 'bg-zinc-800 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
@@ -408,7 +389,7 @@ export default function CheckoutPage({
                   </button>
                   <button
                     onClick={() => setBillingCycle('annual')}
-                    className={`px-3 py-1.5 rounded-md font-medium transition flex items-center gap-1.5 ${
+                    className={`px-3 py-1.5 rounded-md font-medium transition flex items-center gap-1.5 cursor-pointer ${
                       billingCycle === 'annual' ? 'bg-zinc-800 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
                     }`}
                   >
@@ -418,53 +399,57 @@ export default function CheckoutPage({
                 </div>
               </div>
 
-              {/* Plan Choice Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {Object.values(CHECKOUT_PLANS).map((p) => {
-                  const isSelected = selectedPlanId === p.id;
-                  const price = currency === 'INR'
-                    ? (isAnnual ? p.annualPriceINR : p.monthlyPriceINR)
-                    : (isAnnual ? p.annualPriceUSD : p.monthlyPriceUSD);
-
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => setSelectedPlanId(p.id)}
-                      className={`p-5 rounded-xl border cursor-pointer transition-all duration-200 flex flex-col justify-between ${
-                        isSelected 
-                          ? 'bg-[#14171f] border-indigo-500 ring-1 ring-indigo-500/50 shadow-md' 
-                          : 'bg-[#101217] border-zinc-800 hover:border-zinc-700'
-                      }`}
-                    >
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold text-white tracking-tight">{p.name}</span>
-                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                            isSelected ? 'bg-indigo-500/20 text-indigo-300' : 'bg-zinc-800 text-zinc-400'
-                          }`}>
-                            {p.badge}
-                          </span>
-                        </div>
-                        <div className="text-2xl font-bold text-white mb-1">
-                          {formatMoney(price)}
-                          <span className="text-xs font-normal text-zinc-400"> /mo</span>
-                        </div>
-                        <p className="text-[11px] text-zinc-400 font-light line-clamp-2">{p.tagline}</p>
-                      </div>
-
-                      <div className="pt-4 mt-4 border-t border-zinc-800/80 flex items-center justify-between text-xs">
-                        <span className="text-[11px] text-zinc-400">
-                          {isAnnual ? 'Billed annually' : 'Billed monthly'}
-                        </span>
-                        <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                          isSelected ? 'bg-indigo-500 border-indigo-400' : 'border-zinc-600'
-                        }`}>
-                          {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-white" />}
-                        </div>
-                      </div>
+              {/* Dedicated Pro Founder Plan Showcase Card */}
+              <div className="p-5 rounded-xl border bg-[#14171f] border-indigo-500/70 ring-1 ring-indigo-500/30 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-bold text-white tracking-tight">{plan.name}</span>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 font-medium">
+                        {plan.badge}
+                      </span>
                     </div>
-                  );
-                })}
+                    <p className="text-xs text-zinc-400 font-light">{plan.tagline}</p>
+                  </div>
+
+                  <div className="text-left sm:text-right">
+                    <div className="text-2xl font-bold text-white">
+                      {formatMoney(rawUnitPrice)}
+                      <span className="text-xs font-normal text-zinc-400"> /mo</span>
+                    </div>
+                    <span className="text-[11px] text-indigo-300 font-mono">
+                      {isAnnual ? 'Billed annually (Save 20%)' : 'Billed monthly'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Plan Highlights Grid */}
+                <div className="pt-4 border-t border-zinc-800/80 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-300">
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                    <span className="font-medium text-white">Unlimited generations</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>Priority synthesis queue & 2x speed</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>Custom domain publishing with auto-SSL</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>Multi-turn architectural memory</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>Unlimited persistent project saves</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                    <span>Full React 18 + Vite export suite</span>
+                  </div>
+                </div>
               </div>
             </section>
 

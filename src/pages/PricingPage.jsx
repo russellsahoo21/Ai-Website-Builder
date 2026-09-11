@@ -12,7 +12,7 @@ export default function PricingPage({ navigateTo }) {
       period: "forever",
       desc: "For prototyping personal ideas.",
       features: [
-        "Unlimited generations",
+        "5 free generations",
         "In-memory live sandbox",
         "1-Click ZIP export",
         "Unlimited Free OpenRouter Models",
@@ -28,7 +28,7 @@ export default function PricingPage({ navigateTo }) {
       period: "per month",
       desc: "For indie makers shipping commercial products.",
       features: [
-        "Everything in Free",
+        "Unlimited generations",
         "Priority synthesis speed",
         "Custom domain publishing",
         "Multi-turn architectural memory",
@@ -134,8 +134,10 @@ export default function PricingPage({ navigateTo }) {
               onClick={() => {
                 if (p.id === 'free') {
                   navigateTo('studio');
+                } else if (p.id === 'pro') {
+                  navigateTo('checkout', { plan: 'pro', cycle: billingCycle });
                 } else {
-                  navigateTo('checkout', { plan: p.id, cycle: billingCycle });
+                  window.location.href = 'mailto:sales@aethercraft.io?subject=Inquiry%20about%20Team%20Workspace%20Plan';
                 }
               }}
               className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer ${
