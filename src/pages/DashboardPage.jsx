@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Eye,
   Monitor,
@@ -48,9 +48,13 @@ import {
   Layout,
   Table,
   CreditCard,
-  PieChart
+  PieChart,
+  LogOut,
+  User,
+  UserCheck
 } from 'lucide-react';
-import { useUser } from '@clerk/react';
+import { useUser, useClerk } from '@clerk/react';
+import { dark } from '@clerk/themes';
 import { formatTimeAgo } from '../services/projectService.js';
 import { downloadProjectZip } from '../utils/zipExporter.js';
 import { buildPreviewDoc } from '../utils/previewBuilder.js';
@@ -208,6 +212,57 @@ export default function DashboardPage({
   setSelectedModel
 }) {
   const { user, isLoaded } = useUser();
+  const clerk = useClerk();
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef(null);
+
+  const userDisplayName = user?.fullName || user?.firstName || user?.username || (user?.primaryEmailAddress?.emailAddress ? user.primaryEmailAddress.emailAddress.split('@')[0] : 'My Account');
+  const userEmail = user?.primaryEmailAddress?.emailAddress || user?.emailAddresses?.[0]?.emailAddress || '';
+
+  const handleSignOut = async () => {
+    setIsAccountMenuOpen(false);
+    try {
+      await clerk.signOut();
+      if (typeof navigateTo === 'function') {
+        navigateTo('landing');
+      } else {
+        window.location.href = '/';
+      }
+    } catch (err) {
+      console.error('Clerk signOut error:', err);
+      window.location.href = '/';
+    }
+  };
+
+  const handleOpenClerkProfile = () => {
+    setIsAccountMenuOpen(false);
+    clerk.openUserProfile?.({
+      appearance: {
+        baseTheme: dark,
+      }
+    });
+  };
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(e.target)) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape' && isAccountMenuOpen) {
+        setIsAccountMenuOpen(false);
+      }
+    };
+    if (isAccountMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isAccountMenuOpen]);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState('all'); // 'all' | 'recent' | 'modular'
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
@@ -504,7 +559,7 @@ export default function DashboardPage({
         </div>
 
         {/* Sidebar Footer: Real Quota Tracker + User Profile + Toggle */}
-        <div className={`p-3 border-t border-zinc-800/80 bg-[#080a0e] shrink-0 ${isSidebarCollapsed ? 'space-y-2 flex flex-col items-center' : 'space-y-3'}`}>
+        <div className={`relative p-3 border-t border-zinc-800/80 bg-[#080a0e] shrink-0 ${isSidebarCollapsed ? 'space-y-2 flex flex-col items-center' : 'space-y-3'}`}>
           {/* Free Tier Project Quota */}
           {!isSidebarCollapsed ? (
             <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800/90">
@@ -550,16 +605,124 @@ export default function DashboardPage({
             </div>
           )}
 
-          {/* User Profile Footer */}
-          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center w-full' : 'justify-between'} pt-1`}>
-            {!isSidebarCollapsed ? (
-              <div className="flex items-center gap-2 min-w-0">
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white shrink-0 shadow">
-                  {user?.firstName ? user.firstName[0].toUpperCase() : 'U'}
+          {/* User Profile Footer with Account Menu */}
+          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center w-full' : 'justify-between'} pt-1 relative`}>
+            {/* Floating Account & Sign Out Popup Menu */}
+            {isAccountMenuOpen && (
+              <div
+                ref={accountMenuRef}
+                className={`absolute ${
+                  isSidebarCollapsed 
+                    ? 'left-16 bottom-0 w-64' 
+                    : 'bottom-full left-0 right-0 sm:right-auto sm:w-64 mb-3'
+                } bg-[#0d1017] border border-zinc-700/80 rounded-2xl shadow-2xl shadow-black/95 backdrop-blur-2xl p-2.5 z-50 animate-fadeIn`}
+              >
+                {/* User Profile Header */}
+                <div className="p-2.5 rounded-xl bg-white/[0.03] border border-white/5 mb-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white shrink-0 overflow-hidden shadow">
+                      {user?.imageUrl ? (
+                        <img src={user.imageUrl} alt={userDisplayName} className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{userDisplayName[0].toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-white truncate">{userDisplayName}</div>
+                      <div className="text-[10px] text-zinc-400 truncate">{userEmail || 'Personal Account'}</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-400 border-t border-white/5 pt-1.5 font-mono">
+                    <span className="text-zinc-500">Plan</span>
+                    <span className="text-amber-400 font-semibold">Free Tier • {projectCount}/{MAX_FREE_PROJECTS}</span>
+                  </div>
                 </div>
-                <div className="min-w-0">
+
+                {/* Menu Action Items */}
+                <div className="space-y-0.5 text-xs">
+                  {/* 1. Manage Account (Clerk Profile Modal) */}
+                  <button
+                    onClick={handleOpenClerkProfile}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/[0.06] transition text-left group cursor-pointer"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition">
+                      <User className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold block text-zinc-200 group-hover:text-white">Manage Account</span>
+                      <span className="text-[10px] text-zinc-500 block truncate">Profile, security & email</span>
+                    </div>
+                  </button>
+
+                  {/* 2. Engine Settings */}
+                  <button
+                    onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      setActiveSidebarTab('settings');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/[0.06] transition text-left group cursor-pointer"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-zinc-800 border border-zinc-700/60 flex items-center justify-center text-zinc-400 group-hover:text-zinc-200 group-hover:scale-105 transition">
+                      <Settings className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold block text-zinc-200 group-hover:text-white">Engine Settings</span>
+                      <span className="text-[10px] text-zinc-500 block truncate">API keys & models</span>
+                    </div>
+                  </button>
+
+                  {/* 3. Documentation */}
+                  <button
+                    onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      navigateTo('docs');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/[0.06] transition text-left group cursor-pointer"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-zinc-800 border border-zinc-700/60 flex items-center justify-center text-zinc-400 group-hover:text-zinc-200 group-hover:scale-105 transition">
+                      <BookOpen className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold block text-zinc-200 group-hover:text-white">Docs & AI Guide</span>
+                      <span className="text-[10px] text-zinc-500 block truncate">Architecture & shims</span>
+                    </div>
+                  </button>
+
+                  <div className="my-1.5 border-t border-white/5" />
+
+                  {/* 4. SIGN OUT BUTTON */}
+                  <button
+                    onClick={handleSignOut}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition text-left group cursor-pointer"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 group-hover:scale-105 transition">
+                      <LogOut className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-bold block text-rose-400 group-hover:text-rose-300">Sign Out</span>
+                      <span className="text-[10px] text-rose-400/60 block truncate">Log out of AetherCraft</span>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!isSidebarCollapsed ? (
+              <div 
+                onClick={() => setIsAccountMenuOpen(prev => !prev)}
+                className="flex items-center gap-2 min-w-0 cursor-pointer p-1 -ml-1 rounded-xl hover:bg-white/[0.04] transition flex-1"
+                title="Click for Account & Sign Out"
+              >
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white shrink-0 overflow-hidden shadow">
+                  {user?.imageUrl ? (
+                    <img src={user.imageUrl} alt={userDisplayName} className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{userDisplayName[0].toUpperCase()}</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
                   <div className="text-xs font-semibold text-white truncate">
-                    {user?.fullName || displayName}
+                    {userDisplayName}
                   </div>
                   <div className="text-[10px] text-zinc-500 truncate">
                     Personal Plan
@@ -568,19 +731,30 @@ export default function DashboardPage({
               </div>
             ) : (
               <div 
-                onClick={() => setActiveSidebarTab('settings')}
-                className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white mx-auto shadow shrink-0 cursor-pointer hover:ring-2 hover:ring-zinc-700 transition"
-                title={`${user?.fullName || displayName} - Settings`}
+                onClick={() => setIsAccountMenuOpen(prev => !prev)}
+                className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white mx-auto shadow shrink-0 cursor-pointer hover:ring-2 hover:ring-zinc-700 transition overflow-hidden"
+                title={`${userDisplayName} - Account & Sign Out`}
               >
-                {user?.firstName ? user.firstName[0].toUpperCase() : 'U'}
+                {user?.imageUrl ? (
+                  <img src={user.imageUrl} alt={userDisplayName} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{userDisplayName[0].toUpperCase()}</span>
+                )}
               </div>
             )}
 
             {!isSidebarCollapsed && (
               <button
-                onClick={() => setActiveSidebarTab('settings')}
-                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
-                title="Account Settings"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsAccountMenuOpen(prev => !prev);
+                }}
+                className={`p-1.5 rounded-lg transition cursor-pointer ${
+                  isAccountMenuOpen
+                    ? 'text-white bg-zinc-800 ring-1 ring-zinc-600'
+                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
+                }`}
+                title="Account & Sign Out Menu"
               >
                 <Settings className="w-3.5 h-3.5" />
               </button>
@@ -1333,6 +1507,52 @@ npm run dev
                 <p className="text-xs text-zinc-400 mt-0.5">
                   Configure your OpenRouter API key and preferred synthesis model.
                 </p>
+              </div>
+
+              {/* Account & Session Management */}
+              <div className="p-5 rounded-2xl bg-[#0c0f16] border border-zinc-800/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-indigo-400" />
+                    <h4 className="text-xs font-bold text-white uppercase font-mono">Account & Authentication</h4>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                    Personal Plan • Free Tier
+                  </span>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 p-4 rounded-xl bg-zinc-950/60 border border-zinc-800/80">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-sm text-white shrink-0 overflow-hidden shadow">
+                      {user?.imageUrl ? (
+                        <img src={user.imageUrl} alt={userDisplayName} className="w-full h-full object-cover" />
+                      ) : (
+                        <span>{userDisplayName[0].toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div>
+                      <div className="text-sm font-bold text-white">{userDisplayName}</div>
+                      <div className="text-xs text-zinc-400 font-mono">{userEmail || 'Active Clerk Session'}</div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                    <button
+                      onClick={handleOpenClerkProfile}
+                      className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/60 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <User className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Manage Account</span>
+                    </button>
+                    <button
+                      onClick={handleSignOut}
+                      className="flex-1 sm:flex-none px-4 py-2 rounded-xl text-xs font-bold bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 hover:text-rose-300 border border-rose-500/30 transition flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <LogOut className="w-3.5 h-3.5" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* API Key Input */}
