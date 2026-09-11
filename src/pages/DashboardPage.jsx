@@ -376,14 +376,14 @@ export default function DashboardPage({
       <aside 
         className={`${
           isSidebarCollapsed ? 'w-16' : 'w-64'
-        } bg-[#090b10] border-r border-zinc-800/80 flex flex-col justify-between transition-all duration-200 shrink-0 z-30 relative`}
+        } bg-[#090b10] border-r border-zinc-800/80 flex flex-col justify-between transition-all duration-200 shrink-0 z-30`}
       >
         {/* Top Branding Section */}
         <div className="flex flex-col flex-1 min-h-0">
+          {/* Header Row */}
           <div className="h-14 border-b border-zinc-800/80 px-3 flex items-center justify-between shrink-0">
             {!isSidebarCollapsed ? (
               <div className="flex items-center gap-2.5 min-w-0">
-                {/* Logo Box - strict aspect-square & shrink-0 to prevent any squishing */}
                 <div className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center font-bold text-xs text-black shrink-0 aspect-square shadow-sm">
                   A
                 </div>
@@ -400,14 +400,15 @@ export default function DashboardPage({
                 </div>
               </div>
             ) : (
-              /* Centered crisp logo in collapsed mode */
-              <div 
+              /* Exactly centered logo in collapsed mode, aligned on the 32px center line */
+              <button 
                 onClick={() => setIsSidebarCollapsed(false)}
-                className="w-8 h-8 rounded-lg bg-zinc-100 flex items-center justify-center font-bold text-xs text-black mx-auto shrink-0 aspect-square cursor-pointer hover:bg-white transition"
+                className="w-10 h-10 rounded-xl bg-zinc-100 hover:bg-white text-black font-bold text-xs flex items-center justify-center mx-auto shadow-sm transition group"
                 title="Expand Workspace Sidebar"
               >
-                A
-              </div>
+                <span className="group-hover:hidden">A</span>
+                <PanelLeftOpen className="w-4 h-4 hidden group-hover:block text-black" />
+              </button>
             )}
 
             {!isSidebarCollapsed && (
@@ -421,24 +422,15 @@ export default function DashboardPage({
             )}
           </div>
 
-          {/* Floating Expand Tab when collapsed */}
-          {isSidebarCollapsed && (
-            <button
-              onClick={() => setIsSidebarCollapsed(false)}
-              className="absolute -right-3 top-4 w-6 h-6 rounded-full bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center shadow-lg z-40 transition"
-              title="Expand Sidebar"
-            >
-              <ChevronRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-
           {/* Quick Launch Studio Shortcut */}
-          <div className="p-2.5 shrink-0">
+          <div className={`${isSidebarCollapsed ? 'p-2 flex justify-center' : 'p-2.5'} shrink-0`}>
             <button
               onClick={() => navigateTo('studio')}
-              className={`w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-800/90 text-zinc-100 hover:bg-zinc-700/80 hover:text-white border border-zinc-700/50 transition group ${
-                isSidebarCollapsed ? 'justify-center px-0' : ''
-              }`}
+              className={`${
+                isSidebarCollapsed 
+                  ? 'w-10 h-10 rounded-xl bg-zinc-800/90 hover:bg-zinc-700 text-cyan-400 border border-zinc-700/50 flex items-center justify-center mx-auto'
+                  : 'w-full flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold bg-zinc-800/90 text-zinc-100 hover:bg-zinc-700/80 hover:text-white border border-zinc-700/50'
+              } transition group`}
               title="Launch Code Studio"
             >
               <Code2 className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform shrink-0" />
@@ -452,15 +444,15 @@ export default function DashboardPage({
           </div>
 
           {/* Sidebar Nav Items Divided into Organized Sections */}
-          <div className="flex-1 overflow-y-auto px-2.5 py-1 space-y-4 min-h-0">
+          <div className={`flex-1 overflow-y-auto ${isSidebarCollapsed ? 'px-0 py-1' : 'px-2.5 py-1'} space-y-4 min-h-0`}>
             {sidebarNavGroups.map((grp) => (
-              <div key={grp.group}>
+              <div key={grp.group} className={isSidebarCollapsed ? 'space-y-1' : ''}>
                 {!isSidebarCollapsed && (
                   <div className="px-2 mb-1.5 text-[10px] font-mono tracking-wider text-zinc-500 font-semibold uppercase">
                     {grp.group}
                   </div>
                 )}
-                <div className="space-y-0.5">
+                <div className={`${isSidebarCollapsed ? 'space-y-1.5 flex flex-col items-center' : 'space-y-0.5'}`}>
                   {grp.items.map((item) => {
                     const Icon = item.icon;
                     const isActive = activeSidebarTab === item.id;
@@ -468,27 +460,39 @@ export default function DashboardPage({
                       <button
                         key={item.id}
                         onClick={() => setActiveSidebarTab(item.id)}
-                        className={`w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium transition ${
-                          isActive
-                            ? 'bg-zinc-800 text-white font-semibold shadow-sm border border-zinc-700/60'
-                            : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/80 border border-transparent'
-                        } ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}
+                        className={`transition ${
+                          isSidebarCollapsed
+                            ? `w-10 h-10 rounded-xl flex items-center justify-center mx-auto ${
+                                isActive
+                                  ? 'bg-zinc-800 text-white font-semibold shadow-sm border border-zinc-700/60'
+                                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/80 border border-transparent'
+                              }`
+                            : `w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs font-medium ${
+                                isActive
+                                  ? 'bg-zinc-800 text-white font-semibold shadow-sm border border-zinc-700/60'
+                                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/80 border border-transparent'
+                              }`
+                        }`}
                         title={item.label}
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <Icon className={`w-4 h-4 shrink-0 ${
-                            isActive ? 'text-zinc-100' : 'text-zinc-400'
-                          }`} />
-                          {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
-                        </div>
-                        {!isSidebarCollapsed && item.badge && (
-                          <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono shrink-0 ${
-                            item.id === 'projects' && isAtProjectLimit
-                              ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60'
-                              : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/40'
-                          }`}>
-                            {item.badge}
-                          </span>
+                        {isSidebarCollapsed ? (
+                          <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-zinc-100' : 'text-zinc-400'}`} />
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-zinc-100' : 'text-zinc-400'}`} />
+                              <span className="truncate">{item.label}</span>
+                            </div>
+                            {item.badge && (
+                              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono shrink-0 ${
+                                item.id === 'projects' && isAtProjectLimit
+                                  ? 'bg-amber-950/80 text-amber-400 border border-amber-800/60'
+                                  : 'bg-zinc-800/80 text-zinc-400 border border-zinc-700/40'
+                              }`}>
+                                {item.badge}
+                              </span>
+                            )}
+                          </>
                         )}
                       </button>
                     );
@@ -499,8 +503,8 @@ export default function DashboardPage({
           </div>
         </div>
 
-        {/* Sidebar Footer: Real Quota Tracker + User Profile */}
-        <div className="p-3 border-t border-zinc-800/80 bg-[#080a0e] shrink-0 space-y-3">
+        {/* Sidebar Footer: Real Quota Tracker + User Profile + Toggle */}
+        <div className={`p-3 border-t border-zinc-800/80 bg-[#080a0e] shrink-0 ${isSidebarCollapsed ? 'space-y-2 flex flex-col items-center' : 'space-y-3'}`}>
           {/* Free Tier Project Quota */}
           {!isSidebarCollapsed ? (
             <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800/90">
@@ -534,19 +538,19 @@ export default function DashboardPage({
             </div>
           ) : (
             <div 
-              className="w-full flex flex-col items-center justify-center p-1 cursor-pointer"
-              onClick={() => setIsSidebarCollapsed(false)}
-              title={`Project quota: ${projectCount}/${MAX_FREE_PROJECTS}`}
+              className="w-10 py-1.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 flex flex-col items-center justify-center mx-auto cursor-pointer hover:border-zinc-700 transition"
+              onClick={() => setActiveSidebarTab('settings')}
+              title={`Free tier usage: ${projectCount}/${MAX_FREE_PROJECTS} projects`}
             >
-              <span className="text-[10px] font-mono text-zinc-400 font-bold">{projectCount}/{MAX_FREE_PROJECTS}</span>
+              <span className="text-[10px] font-mono text-zinc-300 font-bold leading-none">{projectCount}/{MAX_FREE_PROJECTS}</span>
               <div className="w-6 h-1 rounded-full bg-zinc-800 mt-1 overflow-hidden">
-                <div className="h-full bg-zinc-300" style={{ width: `${quotaPercent}%` }} />
+                <div className={`h-full ${isAtProjectLimit ? 'bg-amber-500' : 'bg-zinc-200'}`} style={{ width: `${quotaPercent}%` }} />
               </div>
             </div>
           )}
 
           {/* User Profile Footer */}
-          <div className="flex items-center justify-between pt-1">
+          <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center w-full' : 'justify-between'} pt-1`}>
             {!isSidebarCollapsed ? (
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white shrink-0 shadow">
@@ -562,7 +566,11 @@ export default function DashboardPage({
                 </div>
               </div>
             ) : (
-              <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white mx-auto shadow shrink-0">
+              <div 
+                onClick={() => setActiveSidebarTab('settings')}
+                className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white mx-auto shadow shrink-0 cursor-pointer hover:ring-2 hover:ring-zinc-700 transition"
+                title={`${user?.fullName || displayName} - Settings`}
+              >
                 {user?.firstName ? user.firstName[0].toUpperCase() : 'U'}
               </div>
             )}
@@ -577,6 +585,17 @@ export default function DashboardPage({
               </button>
             )}
           </div>
+
+          {/* Bottom Expand Toggle when collapsed */}
+          {isSidebarCollapsed && (
+            <button
+              onClick={() => setIsSidebarCollapsed(false)}
+              className="w-10 h-10 rounded-xl text-zinc-500 hover:text-white hover:bg-zinc-800/80 flex items-center justify-center mx-auto transition"
+              title="Expand Sidebar"
+            >
+              <PanelLeftOpen className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </aside>
 
