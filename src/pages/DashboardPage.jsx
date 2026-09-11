@@ -105,7 +105,29 @@ const MODULAR_COMPONENTS = [
 function ProjectPreviewThumbnail({ files, title, onQuickPreview, onOpenStudio }) {
   const doc = useMemo(() => {
     try {
-      return files ? buildPreviewDoc(files) : '';
+      const raw = files ? buildPreviewDoc(files) : '';
+      if (!raw) return '';
+      // Inject scrollbar-hiding and clean-render CSS into preview thumbnail
+      const noScrollCss = `
+        <style>
+          html, body {
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            scrollbar-width: none !important;
+            -ms-overflow-style: none !important;
+          }
+          ::-webkit-scrollbar {
+            display: none !important;
+            width: 0 !important;
+            height: 0 !important;
+          }
+        </style>
+      `;
+      if (raw.includes('</head>')) {
+        return raw.replace('</head>', noScrollCss + '</head>');
+      }
+      return noScrollCss + raw;
     } catch (err) {
       console.warn('[ProjectPreviewThumbnail doc error]', err);
       return '';
@@ -114,7 +136,7 @@ function ProjectPreviewThumbnail({ files, title, onQuickPreview, onOpenStudio })
   const hasFiles = Boolean(files && Object.keys(files).length > 0 && doc);
 
   return (
-    <div className="relative w-full h-44 bg-[#090b10] rounded-xl overflow-hidden border border-zinc-800/80 mb-3 group/thumb">
+    <div className="relative w-full h-48 bg-[#090b10] rounded-xl overflow-hidden border border-zinc-800/80 mb-3 group/thumb">
       {hasFiles ? (
         <div className="w-full h-full overflow-hidden relative pointer-events-none select-none bg-[#090a0f]">
           <iframe
@@ -122,8 +144,9 @@ function ProjectPreviewThumbnail({ files, title, onQuickPreview, onOpenStudio })
             title={title || 'App Preview'}
             sandbox="allow-scripts"
             tabIndex={-1}
+            scrolling="no"
             loading="lazy"
-            className="w-[850px] h-[500px] origin-top-left scale-[0.38] border-0 select-none bg-[#090a0f] pointer-events-none"
+            className="w-[300%] h-[300%] origin-top-left scale-[0.33333333] border-0 select-none bg-[#090a0f] pointer-events-none"
           />
         </div>
       ) : (
