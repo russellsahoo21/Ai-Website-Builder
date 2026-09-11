@@ -18,15 +18,15 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
     const doc = buildPreviewDoc(files);
     if (!doc) return;
 
-    // Only update if doc actually changed
-    if (doc !== lastGoodDocRef.current) {
-      lastGoodDocRef.current = doc;
-      if (iframeRef.current) iframeRef.current.srcdoc = doc;
+    lastGoodDocRef.current = doc;
+    if (iframeRef.current) {
+      iframeRef.current.srcdoc = doc;
     }
   }, [files, keyTrigger]);
 
   return (
     <iframe
+      key={keyTrigger}
       ref={iframeRef}
       title="Sandbox Preview"
       sandbox="allow-scripts allow-modals allow-same-origin allow-forms"

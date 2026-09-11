@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   Monitor, 
   Tablet, 
@@ -28,6 +28,13 @@ export default function Header({
   onBackToHome,
   isGenerating
 }) {
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefreshClick = () => {
+    setIsRefreshing(true);
+    onRefresh?.();
+    setTimeout(() => setIsRefreshing(false), 500);
+  };
   return (
     <header className="h-12 border-b border-zinc-800 bg-[#0d0f14] px-4 flex items-center justify-between select-none z-30 shrink-0">
       {/* Back to Home & Brand */}
@@ -133,16 +140,16 @@ export default function Header({
       {/* Action Buttons */}
       <div className="flex items-center gap-1.5">
         <button
-          onClick={onRefresh}
-          className="p-1.5 rounded-md border border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white transition"
+          onClick={handleRefreshClick}
+          className="p-1.5 rounded-md border border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white transition cursor-pointer"
           title="Refresh Preview Sandbox"
         >
-          <RotateCcw className="w-3.5 h-3.5" />
+          <RotateCcw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
         </button>
 
         <button
           onClick={onOpenNewTab}
-          className="p-1.5 rounded-md border border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white transition"
+          className="p-1.5 rounded-md border border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white transition cursor-pointer"
           title="Open in Full Browser Tab"
         >
           <ExternalLink className="w-3.5 h-3.5" />

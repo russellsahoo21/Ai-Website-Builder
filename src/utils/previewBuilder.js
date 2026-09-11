@@ -440,38 +440,7 @@ export function buildPreviewDoc(files) {
   }
 
   // 2. Handle Vanilla HTML/CSS/JS Applications
-  if (!html) {
-    if (Object.keys(workingFiles).length > 0) {
-      return `<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-  <meta charset="UTF-8">
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
-    body { background-color: #090a0f; color: #f4f4f5; font-family: ui-sans-serif, system-ui, sans-serif; margin: 0; }
-    ${css}
-  </style>
-</head>
-<body class="min-h-screen bg-[#090a0f] text-zinc-100 flex flex-col items-center justify-center p-6 text-center select-none">
-  <div class="max-w-md p-8 rounded-2xl bg-zinc-900/80 border border-zinc-800 shadow-2xl flex flex-col items-center">
-    <div class="w-12 h-12 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-4 animate-pulse">
-      <svg class="w-6 h-6 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-      </svg>
-    </div>
-    <h3 class="text-base font-semibold text-white mb-1.5">Mounting Application Structure</h3>
-    <p class="text-xs text-zinc-400 leading-relaxed mb-4">
-      Synthesizing modular components into the in-memory React runtime...
-    </p>
-    <div class="w-full bg-zinc-800 rounded-full h-1.5 overflow-hidden">
-      <div class="bg-indigo-500 h-full rounded-full animate-pulse" style="width: 75%"></div>
-    </div>
-  </div>
-</body>
-</html>`;
-    }
-    return '';
-  }
+  if (!html) return '';
 
   const js = workingFiles['script.js'] || '';
 

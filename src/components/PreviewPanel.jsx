@@ -18,9 +18,19 @@ export default function PreviewPanel({ files, viewport, keyTrigger, isGenerating
     Object.values(files).some(v => typeof v === 'string' && v.trim().length > 0)
   );
 
+  const hasValidApp = Boolean(
+    files && (
+      (files['src/App.jsx'] && files['src/App.jsx'].trim().length > 30) ||
+      (files['App.jsx'] && files['App.jsx'].trim().length > 30) ||
+      (files['index.html'] && files['index.html'].trim().length > 30)
+    )
+  );
+
+  const shouldShowLoader = isGenerating || (hasFiles && !hasValidApp);
+
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center bg-[#07090e] overflow-hidden p-2 sm:p-4">
-      {isGenerating ? (
+      {shouldShowLoader ? (
         <div className="w-full h-full animate-fadeIn flex items-center justify-center">
           <SatisfyingLoader promptText={promptText} onCancel={onCancel} />
         </div>

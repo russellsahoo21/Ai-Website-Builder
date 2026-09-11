@@ -22,6 +22,7 @@ import { useSandboxMessages } from './hooks/useSandboxMessages';
 import { STARTER_TEMPLATES } from './templates/starterTemplates';
 import { downloadProjectZip } from './utils/zipExporter';
 import { buildPreviewDoc } from './utils/previewBuilder';
+import { ensureStandardReactStructure } from './utils/projectStructure';
 import { 
   getAllProjects, 
   getProjectById, 
@@ -291,10 +292,38 @@ export default function App() {
   };
 
   const handleOpenNewTab = () => {
-    const doc = buildPreviewDoc(files);
-    if (!doc) return;
-    const blob = new Blob([doc], { type: 'text/html' });
-    window.open(URL.createObjectURL(blob), '_blank');
+    const hasAnyFiles = files && Object.keys(files).length > 0;
+    if (!hasAnyFiles) {
+      alert("Please synthesize or generate a project first before opening preview in a new tab.");
+      return;
+    }
+
+    const working = ensureStandardReactStructure(files, activeProject?.name || 'AetherCraft App');
+    const doc = buildPreviewDoc(working);
+    if (!doc) {
+      alert("Application code is still compiling. Please wait a moment.");
+      return;
+    }
+
+    const win = window.open('', '_blank');
+    if (win) {
+      win.document.open();
+      win.document.write(doc);
+      win.document.close();
+    } else {
+      const blob = new Blob([doc], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 1000);
+    }
   };
 
   const handleLaunchWithPrompt = (promptText, enginePrompt = null) => {
