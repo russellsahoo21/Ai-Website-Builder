@@ -1,4 +1,4 @@
-﻿import { useRef, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
 import { streamGenerateWebsite } from '../services/aiService.js';
 import { parseGeneratedFiles } from '../services/fileParser.js';
 import { getFriendlyMessage, isRecoverable, buildFixPrompt } from '../sandbox/errorReporter.js';
@@ -167,22 +167,37 @@ export function useGeneration({
           const { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
           if (!needsConversion && Object.keys(merged).length > 0) setFiles(merged);
 
-          // Build clean reply text — never raw code or filenames
-          let replyText = fullText.includes('<<<FILE:')
-            ? fullText.split('<<<FILE:')[0].trim()
-            : fullText.includes('```')
-            ? fullText.split('```')[0].trim()
-            : fullText.trim();
+          // Build clean reply text — never leak raw code, tool-call tokens, or filenames
+          let replyText = fullText;
+          if (replyText.includes('<<<FILE:')) {
+            replyText = replyText.split('<<<FILE:')[0].trim();
+          } else if (replyText.includes('```')) {
+            replyText = replyText.split('```')[0].trim();
+          }
 
-          // Filter out leaked markdown filename headers
-          if (/^(?:#{1,4}|\*\*|File:?)\s*(?:[0-9]+[:..]\s*)?[\w./-]+\*?:?$/i.test(replyText.trim())) {
+          // Strip tool call artifacts, model tokens, and leaked headers
+          replyText = replyText
+            .replace(/<\|[\s\S]*?\|>/g, '')
+            .replace(/\[\s*write\s*\([\s\S]*?\)\s*\]/gi, '')
+            .replace(/write\s*\(\s*(?:file|filename)[\s\S]*?\)/gi, '')
+            .replace(/<tool_call>[\s\S]*?<\/tool_call>/gi, '')
+            .replace(/<tool_call>/gi, '')
+            .trim();
+
+          if (/^(?:#{1,4}|\*\*|File:?)\s*(?:[0-9]+[:.]\s*)?[\w./-]+\*?:?$/i.test(replyText)) {
+            replyText = '';
+          }
+          if (replyText.startsWith('[') || replyText.startsWith('<|') || replyText.includes('import React')) {
             replyText = '';
           }
 
-          const filesReady = Object.keys(merged).length > 0;
+          const fileNamesList = Object.keys(merged);
+          const filesCount = fileNamesList.length;
           if (!replyText || replyText.length < 5) {
-            replyText = filesReady
-              ? 'Application ready. Your project is live in the preview.'
+            replyText = filesCount > 0
+              ? (filesCount > 1 
+                  ? `Synthesized modular application with ${filesCount} files (${fileNamesList.join(', ')}). Your project is live in the preview and explorer.`
+                  : 'Application ready. Your project is live in the preview and explorer.')
               : 'Synthesis complete.';
           }
 

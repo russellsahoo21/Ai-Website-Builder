@@ -2,22 +2,26 @@
  * fileParser.js
  * Hardened AI response parser. Handles all output formats:
  * 1. <<<FILE:...>>> delimiters (primary)
- * 2. Markdown code blocks with optional headers
- * 3. Bare JSX fallback
- * Enforces React-only via fileConflictResolver.
+ * 2. Tool-call patterns (e.g. [write(file="...", content="...")])
+ * 3. Markdown code blocks with headers (e.g. ## components/Navbar.jsx)
+ * 4. Bare JSX fallback
+ * Preserves modular folder structures (e.g. components/Navbar.jsx)
  */
 
 import { resolveFileConflicts, isHtmlDocument } from '../utils/fileConflictResolver.js';
 
-const MIN_CONTENT_LENGTH = 50;
+const MIN_CONTENT_LENGTH = 20;
 
 function cleanFilename(raw) {
   if (!raw || typeof raw !== 'string') return '';
-  return raw
+  let cleaned = raw
     .replace(/^[#\s*]+/, '')
-    .replace(/^\d+[:..]\s*/, '')
+    .replace(/^\d+[:.]\s*/, '')
     .replace(/[*'"`:]/g, '')
     .trim();
+  // Strip any leading ./ or /
+  cleaned = cleaned.replace(/^\.?\//, '');
+  return cleaned;
 }
 
 function classifyContent(content) {
@@ -46,35 +50,58 @@ export function parseGeneratedFiles(text) {
 
   const raw = {};
 
-  // Strategy 1: <<<FILE:...>>> delimiters
-  const fileRegex = /<<<FILE:\s*([^\r\n>]+?)\s*>>>(\s*[\s\S]*?)(?:<<<END_FILE>>>|$)/g;
+  // Strategy 1: <<<FILE:...>>> delimiters (with or without <<<END_FILE>>>)
+  const fileRegex = /<<<FILE:\s*([^\r\n>]+?)\s*>>>([\s\S]*?)(?:<<<END_FILE>>>|$)/g;
   let match;
   while ((match = fileRegex.exec(text)) !== null) {
     const name = cleanFilename(match[1]);
     const content = match[2].trim();
-    if (name && content.length >= MIN_CONTENT_LENGTH) raw[name] = content;
+    if (name && content.length >= MIN_CONTENT_LENGTH) {
+      raw[name] = content;
+    }
   }
 
-  // Strategy 2: Markdown code blocks with optional preceding header
+  // Strategy 2: Tool-call patterns e.g. [write(file="App.jsx", content="...")] or write(file='...')
+  if (Object.keys(raw).length === 0 && (text.includes('write(file=') || text.includes('write(filename='))) {
+    const toolRegex = /(?:\[\s*)?write\s*\(\s*(?:file|filename|path)\s*=\s*['"]([^'"]+)['"]\s*,\s*(?:content\s*=\s*)?['"]([\s\S]*?)['"]\s*\)(?:\s*\])?/gi;
+    let toolMatch;
+    while ((toolMatch = toolRegex.exec(text)) !== null) {
+      const name = cleanFilename(toolMatch[1]);
+      let content = toolMatch[2]
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '  ')
+        .replace(/\\"/g, '"')
+        .replace(/\\'/g, "'");
+      if (name && content.length >= MIN_CONTENT_LENGTH) {
+        raw[name] = content;
+      }
+    }
+  }
+
+  // Strategy 3: Markdown code blocks with optional preceding header
   if (Object.keys(raw).length === 0) {
-    const mdRe = /(?:(?:^|\n)(?:#{1,4}|\*\*|File:?)\s*(?:[0-9]+[:..]\s*)?([^\r\n*]+?\.(?:jsx|js|html|css|tsx|ts))\*?:?\s*\n)? + '`' + (?:html|css|javascript|js|jsx|tsx|typescript|react)?(?:\s+(?:filename="?([^"\n]+)"?|([\w./-]+)))?\n([\s\S]*?)(?: + '`' + |$)/gi;
+    const mdRe = /(?:(?:^|\n)(?:#{1,4}|\*\*|File:?)\s*(?:[0-9]+[:.]\s*)?([^\r\n`*]+?\.(?:jsx|js|html|css|tsx|ts))\*?:?\s*\n)?```(?:html|css|javascript|js|jsx|tsx|typescript|react)?(?:\s+(?:filename="?([^"\n]+)"?|([\w./-]+)))?\n([\s\S]*?)(?:```|$)/gi;
     let m;
     while ((m = mdRe.exec(text)) !== null) {
       const rawName = m[1] || m[2] || m[3];
       const content = m[4].trim();
       const name = rawName ? cleanFilename(rawName) : classifyContent(content);
-      if (name && content.length >= MIN_CONTENT_LENGTH) raw[name] = content;
+      if (name && content.length >= MIN_CONTENT_LENGTH) {
+        raw[name] = content;
+      }
     }
   }
 
-  // Strategy 3: Bare React/JSX code without delimiters
+  // Strategy 4: Bare React/JSX code without delimiters
   if (Object.keys(raw).length === 0) {
     const start = text.search(
       /(?:import\s+React|export\s+default\s+function|function\s+App\b|const\s+App\s*=)/
     );
     if (start !== -1) {
       const content = text.slice(start).trim();
-      if (content.length >= MIN_CONTENT_LENGTH) raw['App.jsx'] = content;
+      if (content.length >= MIN_CONTENT_LENGTH) {
+        raw['App.jsx'] = content;
+      }
     }
   }
 

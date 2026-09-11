@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import LandingPage from './pages/LandingPage';
@@ -137,6 +137,20 @@ export default function App() {
     setRefreshTrigger(prev => prev + 1);
   };
 
+  const handleFileCreate = (filename, initialContent = '') => {
+    setFiles(prev => ({ ...prev, [filename]: initialContent }));
+    setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleFileDelete = (filename) => {
+    setFiles(prev => {
+      const next = { ...prev };
+      delete next[filename];
+      return next;
+    });
+    setRefreshTrigger(prev => prev + 1);
+  };
+
   const handleOpenNewTab = () => {
     const doc = buildPreviewDoc(files);
     if (!doc) return;
@@ -191,7 +205,12 @@ export default function App() {
                 onSandboxError={(msg) => executeAutoFix(msg, false)}
               />
             ) : (
-              <CodeInspector files={files} onFileUpdate={handleFileUpdate} />
+              <CodeInspector
+                files={files}
+                onFileUpdate={handleFileUpdate}
+                onFileCreate={handleFileCreate}
+                onFileDelete={handleFileDelete}
+              />
             )}
           </div>
         </div>

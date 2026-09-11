@@ -38,57 +38,93 @@ export function buildPreviewDoc(files) {
   if (isReact && reactCode.trim().length > 0) {
     const safeReactCode = reactCode.replace(/<\/script>/gi, '<\\/script>');
 
-    // 0. Unescape any escaped characters (handles models emitting JSON-encoded strings)
-    let cleaned = safeReactCode
-      .replace(/\\r\\n/g, '\n')
-      .replace(/\\n/g, '\n')
-      .replace(/\\t/g, '  ')
-      .replace(/\\'/g, "'")
-      .replace(/\\"/g, '"');
+    function cleanJsxModule(rawCode) {
+      if (!rawCode) return '';
+      const safe = rawCode.replace(/<\/script>/gi, '<\\/script>');
+      let cl = safe
+        .replace(/\\r\\n/g, '\n')
+        .replace(/\\n/g, '\n')
+        .replace(/\\t/g, '  ')
+        .replace(/\\'/g, "'")
+        .replace(/\\"/g, '"');
 
-    // 1. Strip TypeScript type imports & all imports
-    cleaned = cleaned.replace(/import\s+type\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
-    cleaned = cleaned.replace(/import\s+type\s*\{[\s\S]*?\}\s*from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
-    cleaned = cleaned.replace(/import\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [import resolved via sandbox shim]');
-    cleaned = cleaned.replace(/import\s+['"\\].*?['"\\];?/g, '// [side-effect import resolved]');
+      // 1. Strip TypeScript type imports & all imports
+      cl = cl.replace(/import\s+type\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
+      cl = cl.replace(/import\s+type\s*\{[\s\S]*?\}\s*from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
+      cl = cl.replace(/import\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [import resolved via sandbox shim]');
+      cl = cl.replace(/import\s+['"\\].*?['"\\];?/g, '// [side-effect import resolved]');
 
-    // 2. Normalize exports
-    cleaned = cleaned.replace(/export\s*\*\s*from\s+['"\\].*?['"\\];?/g, '// [export * stripped]');
-    cleaned = cleaned.replace(/export\s+(?:default\s+)?(?:async\s+)?function\s+/g, 'function ');
-    cleaned = cleaned.replace(/export\s+(?:default\s+)?class\s+/g, 'class ');
-    cleaned = cleaned.replace(/export\s+(?:default\s+)?(?:const|let|var)\s+/g, (m) => m.replace(/export\s+(?:default\s+)?/, ''));
-    cleaned = cleaned.replace(/export\s+default\s+/g, '// export default ');
-    cleaned = cleaned.replace(/export\s*\{[\s\S]*?\};?/g, '// [exports stripped]');
+      // 2. Normalize exports
+      cl = cl.replace(/export\s*\*\s*from\s+['"\\].*?['"\\];?/g, '// [export * stripped]');
+      cl = cl.replace(/export\s+(?:default\s+)?(?:async\s+)?function\s+/g, 'function ');
+      cl = cl.replace(/export\s+(?:default\s+)?class\s+/g, 'class ');
+      cl = cl.replace(/export\s+(?:default\s+)?(?:const|let|var)\s+/g, (m) => m.replace(/export\s+(?:default\s+)?/, ''));
+      cl = cl.replace(/export\s+default\s+/g, '// export default ');
+      cl = cl.replace(/export\s*\{[\s\S]*?\};?/g, '// [exports stripped]');
+      return cl;
+    }
 
-    // 3. Scan user's declared identifiers to prevent ANY collision with shims
-    const userDeclaredNames = new Set(
-      [...cleaned.matchAll(/(?:function|const|let|var|class)\s+([A-Za-z0-9_]+)/g)].map(m => m[1])
-    );
+    const appFileKey = ['App.jsx', 'App.js', 'src/App.jsx', 'app.jsx', 'src/App.js'].find(k => workingFiles[k]);
+    const userDeclaredNames = new Set();
+    const jsxTagsSet = new Set();
 
-    // 4. Pre-extract JSX tags and icon imports (filtering out user declarations)
-    const jsxTags = Array.from(new Set([...safeReactCode.matchAll(/<([A-Z][a-zA-Z0-9_]*)/g)].map(m => m[1])))
-      .filter(tag => !userDeclaredNames.has(tag) && tag !== 'App' && tag !== 'Fragment');
+    // Process all modular sub-components (e.g. components/Navbar.jsx, components/Gallery.jsx, utils/helpers.js)
+    const subComponentFiles = Object.entries(workingFiles).filter(([name, code]) => {
+      if (name === appFileKey) return false;
+      if (!code || typeof code !== 'string') return false;
+      const lower = name.toLowerCase();
+      return (lower.endsWith('.jsx') || lower.endsWith('.tsx') || lower.endsWith('.js')) && !isHtmlDoc(code);
+    });
 
-    // 5. Extract icon imports & aliases (filtering out user declarations)
+    let subComponentsBundle = '';
+    subComponentFiles.forEach(([filename, content]) => {
+      const cleanedSub = cleanJsxModule(content);
+      const modDeclared = [...cleanedSub.matchAll(/(?:function|const|let|var|class)\s+([A-Za-z0-9_]+)/g)].map(m => m[1]);
+      modDeclared.forEach(name => userDeclaredNames.add(name));
+
+      [...content.matchAll(/<([A-Z][a-zA-Z0-9_]*)/g)].forEach(m => jsxTagsSet.add(m[1]));
+
+      // Auto-bind components to window so any component or App can access them
+      const windowBinds = modDeclared
+        .filter(name => /^[A-Z]/.test(name))
+        .map(name => `if (typeof ${name} !== 'undefined') { window['${name}'] = ${name}; }`)
+        .join('\n    ');
+
+      subComponentsBundle += `\n    // [Modular Component: ${filename}]\n    ${cleanedSub}\n    ${windowBinds}\n`;
+    });
+
+    const cleaned = cleanJsxModule(reactCode);
+    const appDeclared = [...cleaned.matchAll(/(?:function|const|let|var|class)\s+([A-Za-z0-9_]+)/g)].map(m => m[1]);
+    appDeclared.forEach(name => userDeclaredNames.add(name));
+    [...safeReactCode.matchAll(/<([A-Z][a-zA-Z0-9_]*)/g)].forEach(m => jsxTagsSet.add(m[1]));
+
+    const jsxTags = Array.from(jsxTagsSet).filter(tag => !userDeclaredNames.has(tag) && tag !== 'App' && tag !== 'Fragment');
+
+    // Extract icon imports & aliases from all files
     const iconAliases = [];
     const iconImportRegex = /import\s*\{([\s\S]*?)\}\s*from\s*['"\\].*?(?:lucide-react|@lucide\/react|react-icons[\/\w-]*).*?['"\\];?/g;
-    let iconMatch;
-    while ((iconMatch = iconImportRegex.exec(safeReactCode)) !== null) {
-      const parts = iconMatch[1].split(',').map(s => s.trim()).filter(Boolean);
-      parts.forEach(p => {
-        const aliasMatch = p.match(/^(\w+)\s+as\s+(\w+)$/);
-        if (aliasMatch) {
-          if (!userDeclaredNames.has(aliasMatch[2])) {
-            iconAliases.push({ orig: aliasMatch[1], alias: aliasMatch[2] });
+    
+    // Check all JSX files for icon imports
+    const allCodeSources = [reactCode, ...subComponentFiles.map(f => f[1])];
+    allCodeSources.forEach(source => {
+      let iconMatch;
+      while ((iconMatch = iconImportRegex.exec(source)) !== null) {
+        const parts = iconMatch[1].split(',').map(s => s.trim()).filter(Boolean);
+        parts.forEach(p => {
+          const aliasMatch = p.match(/^(\w+)\s+as\s+(\w+)$/);
+          if (aliasMatch) {
+            if (!userDeclaredNames.has(aliasMatch[2])) {
+              iconAliases.push({ orig: aliasMatch[1], alias: aliasMatch[2] });
+            }
+          } else {
+            const name = p.replace(/[^\w]/g, '');
+            if (name && !userDeclaredNames.has(name)) {
+              iconAliases.push({ orig: name, alias: name });
+            }
           }
-        } else {
-          const name = p.replace(/[^\w]/g, '');
-          if (name && !userDeclaredNames.has(name)) {
-            iconAliases.push({ orig: name, alias: name });
-          }
-        }
-      });
-    }
+        });
+      }
+    });
 
     const aliasAssignments = iconAliases
       .map(({ orig, alias }) => `window['${alias}'] = LucideProxy['${orig}'] || LucideProxy['circle'];`)
@@ -304,6 +340,10 @@ export function buildPreviewDoc(files) {
     }
 
 
+    // --- Modular Sub-Components Bundle ---
+    ${subComponentsBundle}
+
+    // --- Root App Component ---
     ${cleaned}
 
     const defaultExp = '${defaultExportName}';

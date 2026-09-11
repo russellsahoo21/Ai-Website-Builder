@@ -1,4 +1,4 @@
-﻿/**
+/**
  * aiService.js
  * OpenRouter API integration with:
  * - React-only enforcement in SYSTEM_PROMPT
@@ -55,33 +55,59 @@ Take as much time as needed to produce complete, correct, high-quality code.
 OUTPUT FORMAT (MANDATORY):
 You MUST ALWAYS wrap your complete code in these exact delimiters:
 
+<<<FILE:components/Navbar.jsx>>>
+import React from 'react';
+import { Compass, Sparkles } from 'lucide-react';
+
+export default function Navbar({ activeTab, onSelectTab }) {
+  return (
+    <nav className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-[#090a0f]/80 backdrop-blur">
+      <div className="flex items-center gap-2 font-bold text-sm tracking-tight text-zinc-100">
+        <Compass className="w-4 h-4 text-cyan-400" />
+        <span>Studio</span>
+      </div>
+    </nav>
+  );
+}
+<<<END_FILE>>>
+
 <<<FILE:App.jsx>>>
 import React, { useState, useEffect } from 'react';
+import Navbar from './components/Navbar';
 import { Plus, Trash2, DollarSign, TrendingUp } from 'lucide-react';
 
 export default function App() {
   return (
-    <div className="min-h-screen bg-[#090a0f] text-zinc-100 p-6">
-      {/* complete working UI here */}
+    <div className="min-h-screen bg-[#090a0f] text-zinc-100 font-sans">
+      <Navbar />
+      <main className="p-6 max-w-7xl mx-auto">
+        {/* modular interactive components */}
+      </main>
     </div>
   );
 }
 <<<END_FILE>>>
 
 <<<FILE:styles.css>>>
-/* custom animations */
+/* custom animations & keyframes */
 <<<END_FILE>>>
 
 CRITICAL RULES:
 1. NEVER output a raw HTML document (<!DOCTYPE html>, <html>, <body>). ALWAYS output React 18 JSX only.
-2. NEVER reply with only explanations or plans — always output the complete code.
-3. NEVER name a component, function, or variable: Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server. Use compound domain-specific names instead (FilterPanel, SearchBar, SaveButton).
-4. React Context: always initialize createContext({ ... }) with realistic defaults. Never call useApp() inside the component that provides AppContext.
-5. All sub-components (Modal, StatCard, Table, Header) must be declared in the same App.jsx file.
-6. Use Tailwind CSS for all styling. Use Lucide icons: import { IconName } from 'lucide-react'.
-7. Implement full interactivity with useState, useEffect, localStorage persistence for any CRUD data.
-8. Provide a 1-sentence description of what you built at the very start, then output the files immediately.
-9. Write complete working code with no TODO comments or placeholder content.`;
+2. NEVER reply with only explanations or plans — always output the complete code files.
+3. MODULAR ARCHITECTURE (CRITICAL):
+   Organize applications modularly across multiple component files (e.g. components/Navbar.jsx, components/Sidebar.jsx, components/Gallery.jsx, components/Modal.jsx, App.jsx, styles.css).
+   - Breaking code into separate component files keeps code readable, isolated, and easy to debug.
+   - All exported components in components/ are automatically available throughout the application.
+4. COMPONENT & IDENTIFIER NAMING:
+   NEVER name a component, function, or variable: Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server. Use compound domain-specific names instead (FilterPanel, SearchBar, SaveButton, TagBadge).
+5. REACT CONTEXT & HOOKS SAFETY:
+   Always initialize createContext({ ... }) with realistic defaults. Never call useApp() inside the component that provides AppContext.
+6. STYLING & ICONS:
+   Use Tailwind CSS for all styling (dark obsidian/zinc palette, crisp borders). Use Lucide icons: import { IconName } from 'lucide-react'.
+7. INTERACTIVITY & PERSISTENCE:
+   Implement full interactivity with useState, useEffect, and localStorage persistence for any CRUD data so the app feels 100% production-ready.
+8. Provide a 1-sentence friendly overview at the very start, then output the complete files immediately. No placeholders or TODO comments.`;
 
 // --- Internal helpers ---
 
