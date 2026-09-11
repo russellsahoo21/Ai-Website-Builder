@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import LandingPage from './pages/LandingPage';
@@ -371,7 +371,46 @@ export default function App() {
     );
   }
 
-  // ── Public & Platform Pages ──────────────────────────────────────────────
+  // ── Dedicated Dashboard View (Full-height with permanent Left Sidebar) ────
+  if (currentRoute === 'dashboard' && isSignedIn) {
+    return (
+      <div className="w-screen h-screen flex bg-[#07090e] text-zinc-100 overflow-hidden font-sans">
+        <DashboardPage
+          projects={projects}
+          activeProjectId={activeProjectId}
+          onSelectProject={(project) => {
+            handleSelectProject(project);
+            navigateTo('studio');
+          }}
+          onCreateNewProject={(name, prompt) => {
+            handleCreateNewProject(name, prompt);
+            navigateTo('studio');
+          }}
+          onDeleteProject={handleDeleteProject}
+          onDuplicateProject={handleDuplicateProject}
+          onRenameProject={handleRenameProject}
+          onLoadTemplate={(tmpl) => {
+            handleLoadTemplate(tmpl);
+            navigateTo('studio');
+          }}
+          onLaunchWithPrompt={handleLaunchWithPrompt}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          navigateTo={navigateTo}
+        />
+
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          apiKey={apiKey}
+          setApiKey={setApiKey}
+          selectedModel={selectedModel}
+          setSelectedModel={setSelectedModel}
+        />
+      </div>
+    );
+  }
+
+  // ── Public Marketing Pages ───────────────────────────────────────────────
   return (
     <div className="min-h-screen flex flex-col bg-[#080a0f] text-zinc-100 font-sans">
       <Navigation 
@@ -386,29 +425,6 @@ export default function App() {
             navigateTo={navigateTo} 
             onLaunchWithPrompt={handleLaunchWithPrompt} 
             onLoadTemplate={handleLoadTemplate} 
-          />
-        )}
-        {currentRoute === 'dashboard' && (
-          <DashboardPage
-            projects={projects}
-            activeProjectId={activeProjectId}
-            onSelectProject={(project) => {
-              handleSelectProject(project);
-              navigateTo('studio');
-            }}
-            onCreateNewProject={(name, prompt) => {
-              handleCreateNewProject(name, prompt);
-              navigateTo('studio');
-            }}
-            onDeleteProject={handleDeleteProject}
-            onDuplicateProject={handleDuplicateProject}
-            onRenameProject={handleRenameProject}
-            onLoadTemplate={(tmpl) => {
-              handleLoadTemplate(tmpl);
-              navigateTo('studio');
-            }}
-            onLaunchWithPrompt={handleLaunchWithPrompt}
-            navigateTo={navigateTo}
           />
         )}
         {currentRoute === 'templates' && (
