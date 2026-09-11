@@ -96,6 +96,65 @@ const MODULAR_COMPONENTS = [
   }
 ];
 
+
+function ProjectPreviewThumbnail({ files, title, onQuickPreview, onOpenStudio }) {
+  const doc = useMemo(() => buildPreviewDoc(files || {}), [files]);
+  const hasFiles = Object.keys(files || {}).length > 0 && doc;
+
+  return (
+    <div className="relative w-full h-44 bg-[#090b10] rounded-xl overflow-hidden border border-zinc-800/80 mb-3 group/thumb">
+      {hasFiles ? (
+        <div className="w-full h-full overflow-hidden relative pointer-events-none select-none bg-[#090a0f]">
+          <iframe
+            srcDoc={doc}
+            title={title || 'App Preview'}
+            sandbox="allow-scripts"
+            tabIndex={-1}
+            loading="lazy"
+            className="w-[850px] h-[500px] origin-top-left scale-[0.38] border-0 select-none bg-[#090a0f] pointer-events-none"
+          />
+        </div>
+      ) : (
+        <div className="w-full h-full flex flex-col items-center justify-center text-zinc-600 bg-zinc-950/60 p-4">
+          <Code2 className="w-8 h-8 mb-1.5 opacity-40" />
+          <span className="text-[11px] font-mono">Ready for code synthesis</span>
+        </div>
+      )}
+
+      {/* Top subtle badge */}
+      <div className="absolute top-2 left-2 pointer-events-none">
+        <span className="px-1.5 py-0.5 rounded bg-black/70 backdrop-blur-md text-[9px] font-mono text-zinc-300 border border-white/10">
+          React 18 Preview
+        </span>
+      </div>
+
+      {/* Hover action overlay */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px] opacity-0 group-hover/thumb:opacity-100 transition-all flex items-center justify-center gap-2">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onQuickPreview();
+          }}
+          className="px-3 py-1.5 rounded-lg bg-zinc-800/90 hover:bg-zinc-700 text-white font-semibold text-xs flex items-center gap-1.5 border border-zinc-600 transition"
+        >
+          <Eye className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Interactive Preview</span>
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenStudio();
+          }}
+          className="px-3 py-1.5 rounded-lg bg-white text-black font-semibold text-xs flex items-center gap-1.5 hover:bg-zinc-200 transition shadow"
+        >
+          <Code2 className="w-3.5 h-3.5 text-black" />
+          <span>Studio</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage({
   projects = [],
   activeProjectId,
@@ -121,6 +180,8 @@ export default function DashboardPage({
   const [editingId, setEditingId] = useState(null);
   const [editingName, setEditingName] = useState('');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [previewModalProject, setPreviewModalProject] = useState(null);
+  const [previewDeviceMode, setPreviewDeviceMode] = useState('desktop');
   
   // Persistent Sidebar View State
   const [activeSidebarTab, setActiveSidebarTab] = useState('projects'); 
@@ -749,6 +810,14 @@ export default function DashboardPage({
                         }`}
                       >
                         <div>
+                          {/* Live Visual Preview of what was built */}
+                          <ProjectPreviewThumbnail
+                            files={project.files}
+                            title={project.name}
+                            onQuickPreview={() => setPreviewModalProject(project)}
+                            onOpenStudio={() => onSelectProject(project)}
+                          />
+
                           <div className="flex items-center justify-between gap-2 mb-2">
                             <div className="flex items-center gap-2 min-w-0">
                               <div className="w-7 h-7 rounded-lg bg-zinc-800/90 flex items-center justify-center text-zinc-300 shrink-0 border border-zinc-700/50">
@@ -878,6 +947,16 @@ export default function DashboardPage({
                           <span className="text-[11px]">{formatTimeAgo(project.updatedAt)}</span>
                           <div className="flex items-center gap-1">
                             <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewModalProject(project);
+                              }}
+                              className="p-1.5 rounded hover:bg-zinc-800 hover:text-cyan-400 transition"
+                              title="Live Interactive Preview"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                            </button>
+                            <button
                               onClick={(e) => handleOpenPreviewTab(project, e)}
                               className="p-1.5 rounded hover:bg-zinc-800 hover:text-white"
                               title="Preview in Tab"
@@ -936,6 +1015,12 @@ export default function DashboardPage({
                         </span>
                         <span className="text-[10px] text-zinc-500 font-mono">React 18</span>
                       </div>
+                      <ProjectPreviewThumbnail
+                        files={tmpl.files}
+                        title={tmpl.name}
+                        onQuickPreview={() => setPreviewModalProject({ ...tmpl, files: tmpl.files })}
+                        onOpenStudio={() => onLoadTemplate(tmpl)}
+                      />
                       <h4 className="text-sm font-bold text-white mb-1.5">{tmpl.name}</h4>
                       <p className="text-xs text-zinc-400 leading-relaxed mb-4">{tmpl.description}</p>
                       <div className="flex flex-wrap gap-1.5 mb-4">
@@ -1341,6 +1426,104 @@ npm run dev
             </div>
           )}
         </div>
+      
+      {/* ── Interactive Live Preview Modal (Desktop / Tablet / Mobile) ── */}
+      {previewModalProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-fadeIn">
+          <div className="w-full max-w-5xl h-[85vh] bg-[#0b0e15] border border-zinc-800 rounded-2xl flex flex-col shadow-2xl overflow-hidden">
+            {/* Modal Top Bar */}
+            <div className="h-12 border-b border-zinc-800 px-4 flex items-center justify-between shrink-0 bg-[#090b10]">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className="text-xs font-bold text-white truncate max-w-xs sm:max-w-md">
+                  {previewModalProject.name}
+                </span>
+                <span className="hidden sm:inline-block px-2 py-0.5 rounded bg-zinc-800 text-[10px] font-mono text-zinc-400 border border-zinc-700 shrink-0">
+                  Interactive Live Sandbox
+                </span>
+              </div>
+
+              {/* Device Switcher */}
+              <div className="hidden sm:flex items-center bg-zinc-900 border border-zinc-800 rounded-lg p-0.5">
+                <button
+                  onClick={() => setPreviewDeviceMode('desktop')}
+                  className={`px-2.5 py-1 rounded text-xs flex items-center gap-1.5 transition ${
+                    previewDeviceMode === 'desktop' ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span>Desktop</span>
+                </button>
+                <button
+                  onClick={() => setPreviewDeviceMode('tablet')}
+                  className={`px-2.5 py-1 rounded text-xs flex items-center gap-1.5 transition ${
+                    previewDeviceMode === 'tablet' ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Tablet className="w-3.5 h-3.5" />
+                  <span>Tablet</span>
+                </button>
+                <button
+                  onClick={() => setPreviewDeviceMode('mobile')}
+                  className={`px-2.5 py-1 rounded text-xs flex items-center gap-1.5 transition ${
+                    previewDeviceMode === 'mobile' ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>Mobile</span>
+                </button>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    handleOpenPreviewTab(previewModalProject, { stopPropagation: () => {} });
+                  }}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+                  title="Open in new browser tab"
+                >
+                  <ExternalLink className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => {
+                    onSelectProject(previewModalProject);
+                    setPreviewModalProject(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white text-black font-semibold text-xs hover:bg-zinc-200 transition"
+                >
+                  Edit in Studio
+                </button>
+                <button
+                  onClick={() => setPreviewModalProject(null)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Iframe Sandbox Container */}
+            <div className="flex-1 bg-[#07090e] p-4 flex items-center justify-center overflow-hidden">
+              <div className={`h-full transition-all duration-300 rounded-xl overflow-hidden border border-zinc-800 shadow-2xl bg-white ${
+                previewDeviceMode === 'mobile' 
+                  ? 'w-[375px]' 
+                  : previewDeviceMode === 'tablet' 
+                  ? 'w-[768px]' 
+                  : 'w-full'
+              }`}>
+                <iframe
+                  srcDoc={buildPreviewDoc(previewModalProject.files || {})}
+                  title={previewModalProject.name}
+                  sandbox="allow-scripts allow-forms allow-same-origin allow-modals"
+                  className="w-full h-full border-0 bg-white"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       </main>
     </div>
   );
