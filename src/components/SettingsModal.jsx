@@ -24,7 +24,11 @@ export default function SettingsModal({
   };
 
   const handleTestKey = async () => {
-    if (!tempKey) {
+    const isGemini = selectedModel.includes('gemini');
+    const isNvidia = selectedModel.includes('nvidia') || selectedModel.includes('deepseek-v4');
+    const hasDefaultKey = isGemini || isNvidia;
+
+    if (!tempKey && !hasDefaultKey) {
       setTestResult({ success: false, msg: 'Please enter an API key first' });
       return;
     }
@@ -55,14 +59,14 @@ export default function SettingsModal({
           <span>AI Engine Configuration</span>
         </h3>
         <p className="text-xs text-slate-400 mb-6">
-          Configure your OpenRouter API key and preferred generation model.
+          Configure your preferred generation model and custom API keys.
         </p>
 
         {/* API Key Input */}
         <div className="mb-5">
           <label className="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-2 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
-              <Key className="w-3.5 h-3.5 text-indigo-400" /> OpenRouter API Key
+              <Key className="w-3.5 h-3.5 text-indigo-400" /> Custom API Key (Optional)
             </span>
             <a
               href="https://openrouter.ai/keys"
@@ -70,18 +74,18 @@ export default function SettingsModal({
               rel="noreferrer"
               className="text-[11px] text-indigo-400 hover:text-indigo-300 flex items-center gap-1 normal-case font-normal"
             >
-              Get Free Key <ExternalLink className="w-3 h-3" />
+              Get Keys <ExternalLink className="w-3 h-3" />
             </a>
           </label>
           <input
             type="password"
             value={tempKey}
             onChange={(e) => setTempKey(e.target.value)}
-            placeholder="sk-or-v1-..."
+            placeholder="sk-or-... or nvapi-... or AQ...."
             className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white font-mono text-xs focus:border-indigo-500 focus:outline-none transition"
           />
           <p className="text-[11px] text-slate-500 mt-1.5">
-            Your key is stored only locally in your browser’s localStorage.
+            Gemini & NVIDIA NIM defaults are pre-configured. Enter a key to override or for OpenRouter models.
           </p>
         </div>
 

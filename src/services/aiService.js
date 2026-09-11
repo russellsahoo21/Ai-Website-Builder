@@ -17,6 +17,12 @@ export const AVAILABLE_MODELS = [
     isFree: true,
   },
   {
+    id: 'nvidia/deepseek-v4-pro-0813',
+    name: 'DeepSeek V4 Pro (NVIDIA NIM Free)',
+    badge: 'Frontier Architecture • Free API',
+    isFree: true,
+  },
+  {
     id: 'deepseek/deepseek-chat',
     name: 'DeepSeek V3 (High Value)',
     badge: '$0.001/site • Frontier Code',
@@ -159,6 +165,7 @@ function buildFormattedMessages(messages, currentFiles) {
 
 async function fetchStream(apiKey, model, formattedMessages, signal) {
   const isGemini = model.includes('gemini');
+  const isNvidia = model.includes('nvidia') || model.includes('deepseek-v4');
 
   if (isGemini) {
     const geminiKey = (apiKey && (apiKey.startsWith('AQ.') || apiKey.startsWith('AIzaSy')))
@@ -177,6 +184,28 @@ async function fetchStream(apiKey, model, formattedMessages, signal) {
         messages: formattedMessages,
         stream: true,
         temperature: 0.7,
+      }),
+    });
+  }
+
+  if (isNvidia) {
+    const nvidiaKey = (apiKey && apiKey.startsWith('nvapi-'))
+      ? apiKey
+      : (import.meta.env.VITE_NVIDIA_API_KEY || '');
+
+    return fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      signal,
+      headers: {
+        Authorization: `Bearer ${nvidiaKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-ai/deepseek-v4-pro-0813',
+        messages: formattedMessages,
+        stream: true,
+        temperature: 0.7,
+        chat_template_kwargs: { thinking: false },
       }),
     });
   }
@@ -331,6 +360,32 @@ export async function testOpenRouterConnection(apiKey, model = DEFAULT_MODEL) {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error?.message || `Google Gemini API error: HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || 'Connected';
+  }
+
+  if (model.includes('nvidia') || model.includes('deepseek-v4')) {
+    const nvidiaKey = (apiKey && apiKey.startsWith('nvapi-'))
+      ? apiKey
+      : (import.meta.env.VITE_NVIDIA_API_KEY || '');
+
+    const res = await fetch('https://integrate.api.nvidia.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${nvidiaKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-ai/deepseek-v4-pro-0813',
+        messages: [{ role: 'user', content: "Ping. Respond with 'Connection Successful'." }],
+        chat_template_kwargs: { thinking: false },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `NVIDIA NIM API error: HTTP ${res.status}`);
     }
     const data = await res.json();
     return data.choices?.[0]?.message?.content || 'Connected';

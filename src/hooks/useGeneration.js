@@ -83,7 +83,9 @@ export function useGeneration({
    * Shows a subtle status note in chat, then replaces it with success on completion.
    */
   const executeAutoFix = useCallback(async (rawErrorMsg, isManual = false) => {
-    if (!apiKeyRef.current || isGeneratingRef.current) return;
+    const isProviderWithDefault = selectedModelRef.current?.includes('gemini') || selectedModelRef.current?.includes('nvidia');
+    const hasKey = Boolean(apiKeyRef.current || isProviderWithDefault || import.meta.env.VITE_OPENROUTER_API_KEY);
+    if (!hasKey || isGeneratingRef.current) return;
     if (!isManual && autoFixCountRef.current >= MAX_AUTO_FIX_ATTEMPTS) {
       // Exhausted retries — show single friendly suggestion, no error text
       setMessages(prev => [
@@ -183,7 +185,9 @@ export function useGeneration({
    * Main user-triggered generation.
    */
   const handleSendMessage = useCallback(async (userPrompt, enginePrompt = null) => {
-    if (!apiKey) return false; // caller should open settings
+    const isProviderWithDefault = selectedModel.includes('gemini') || selectedModel.includes('nvidia');
+    const hasKey = Boolean(apiKey || isProviderWithDefault || import.meta.env.VITE_OPENROUTER_API_KEY);
+    if (!hasKey) return false; // caller should open settings
 
     autoFixCountRef.current = 0;
     abortControllerRef.current?.abort();
