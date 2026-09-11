@@ -7,10 +7,32 @@
 export function buildPreviewDoc(files) {
   if (!files || Object.keys(files).length === 0) return '';
 
-  const isReact = Boolean(files['App.jsx'] || files['App.js'] || files['src/App.jsx'] || files['app.jsx']);
-  const reactCode = files['App.jsx'] || files['App.js'] || files['src/App.jsx'] || files['app.jsx'] || '';
-  const css = files['styles.css'] || files['src/styles.css'] || files['src/index.css'] || '';
-  let html = files['index.html'] || '';
+  const isHtmlDoc = (code) => {
+    if (!code || typeof code !== 'string') return false;
+    const trimmed = code.trim().toLowerCase();
+    return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.includes('<!doctype html');
+  };
+
+  const workingFiles = { ...files };
+
+  // If App.jsx is actually an HTML document, promote it to index.html and remove from App.jsx!
+  if (workingFiles['App.jsx'] && isHtmlDoc(workingFiles['App.jsx'])) {
+    if (!workingFiles['index.html']) {
+      workingFiles['index.html'] = workingFiles['App.jsx'];
+    }
+    delete workingFiles['App.jsx'];
+  }
+  if (workingFiles['App.js'] && isHtmlDoc(workingFiles['App.js'])) {
+    if (!workingFiles['index.html']) {
+      workingFiles['index.html'] = workingFiles['App.js'];
+    }
+    delete workingFiles['App.js'];
+  }
+
+  const reactCode = workingFiles['App.jsx'] || workingFiles['App.js'] || workingFiles['src/App.jsx'] || workingFiles['app.jsx'] || '';
+  const isReact = Boolean(reactCode && !isHtmlDoc(reactCode));
+  const css = workingFiles['styles.css'] || workingFiles['src/styles.css'] || workingFiles['src/index.css'] || '';
+  let html = workingFiles['index.html'] || '';
 
   // 1. Handle React 18 Applications
   if (isReact && reactCode.trim().length > 0) {
@@ -400,7 +422,34 @@ export function buildPreviewDoc(files) {
   // 2. Handle Vanilla HTML/CSS/JS Applications
   if (!html) return '';
 
-  const js = files['script.js'] || '';
+  const js = workingFiles['script.js'] || '';
+
+  // Inject Tailwind CDN if missing
+  if (!html.includes('cdn.tailwindcss.com') && !html.includes('tailwind')) {
+    if (html.includes('<head>')) {
+      html = html.replace('<head>', '<head>\n  <script src="https://cdn.tailwindcss.com"></script>');
+    } else {
+      html = '<script src="https://cdn.tailwindcss.com"></script>\n' + html;
+    }
+  }
+
+  // Inject Chart.js if referenced and missing
+  if ((html.includes('chart') || html.includes('Chart')) && !html.includes('chart.js') && !html.includes('chartjs')) {
+    if (html.includes('<head>')) {
+      html = html.replace('<head>', '<head>\n  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>');
+    } else {
+      html = '<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>\n' + html;
+    }
+  }
+
+  // Inject Lucide icons CDN if referenced and missing
+  if ((html.includes('lucide') || html.includes('data-lucide')) && !html.includes('lucide.min.js')) {
+    if (html.includes('<head>')) {
+      html = html.replace('<head>', '<head>\n  <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>');
+    } else {
+      html = '<script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>\n' + html;
+    }
+  }
 
   if (css) {
     if (html.includes('</head>')) {
@@ -416,6 +465,31 @@ export function buildPreviewDoc(files) {
     } else {
       html = html + `<script>\n${js}\n</script>`;
     }
+  }
+
+  // Inject runtime error handling & Lucide initialization into HTML applications
+  const runnerScript = `
+  <script>
+    if (window.lucide) {
+      window.lucide.createIcons();
+      window.addEventListener('DOMContentLoaded', function() { if (window.lucide) window.lucide.createIcons(); });
+      window.addEventListener('load', function() { if (window.lucide) window.lucide.createIcons(); });
+    }
+    window.addEventListener('error', function(e) {
+      console.error('Sandbox runtime error:', e);
+      try {
+        window.parent.postMessage({
+          type: 'SANDBOX_RUNTIME_ERROR',
+          error: { message: e.message || 'Runtime error in script', stack: e.error ? e.error.stack : '' }
+        }, '*');
+      } catch (err) {}
+    });
+  </script>`;
+
+  if (html.includes('</body>')) {
+    html = html.replace('</body>', `${runnerScript}\n</body>`);
+  } else {
+    html += runnerScript;
   }
 
   return html;

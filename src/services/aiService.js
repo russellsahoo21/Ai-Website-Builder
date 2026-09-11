@@ -92,58 +92,68 @@ export default function App() {
  */
 export function parseGeneratedFiles(text) {
   const files = {};
-  const fileRegex = /<<<FILE:([\w./-]+)>>>([\s\S]*?)<<<END_FILE>>>/g;
+
+  const cleanFilename = (raw) => {
+    return raw
+      .replace(/^[#\s*]+/, '')
+      .replace(/^\d+[:.]\s*/, '')
+      .replace(/[*'"`:]/g, '')
+      .trim();
+  };
+
+  const isHtml = (content) => {
+    if (!content || typeof content !== 'string') return false;
+    const trimmed = content.trim().toLowerCase();
+    return trimmed.startsWith('<!doctype') || trimmed.startsWith('<html') || trimmed.includes('<!doctype html');
+  };
+
+  // 1. Primary: strict or flexible <<<FILE:...>>> delimiters
+  const fileRegex = /<<<FILE:\s*([^\r\n>]+?)\s*>>>([\s\S]*?)(?:<<<END_FILE>>>|$)/g;
   let match;
 
   while ((match = fileRegex.exec(text)) !== null) {
-    const filename = match[1].trim();
+    let filename = cleanFilename(match[1]);
     const content = match[2].trim();
-    files[filename] = content;
-  }
-
-  // Fallback 1: Unclosed stream or missing <<<END_FILE>>> at the end
-  if (Object.keys(files).length === 0 && text.includes('<<<FILE:')) {
-    const parts = text.split('<<<FILE:');
-    for (let i = 1; i < parts.length; i++) {
-      const part = parts[i];
-      const match = part.match(/^([\w./-]+)>>>([\s\S]*?)(?:<<<END_FILE>>>|$)/);
-      if (match) {
-        const filename = match[1].trim();
-        const content = match[2].trim();
-        if (content.length > 20) {
-          files[filename] = content;
-        }
+    if (content.length > 0) {
+      if ((filename === 'App.jsx' || filename === 'App.js') && isHtml(content)) {
+        filename = 'index.html';
       }
+      files[filename] = content;
     }
   }
 
-  // Fallback 2: if model formatted as markdown code blocks with filenames or languages
+  // 2. Fallback: markdown code blocks with headers like "## 1:index.html" or ```html
   if (Object.keys(files).length === 0) {
-    const mdRegex = /```(?:html|css|javascript|js|jsx|tsx|react)?(?:\s+(?:filename="?([\w./-]+)"?|([\w./-]+)))?\n([\s\S]*?)(?:```|$)/gi;
+    const mdBlockRegex = /(?:(?:^|\n)(?:#{1,4}|\*\*|File:?)\s*(?:[0-9]+[:.]\s*)?([^\r\n`*]+?\.(?:jsx|js|html|css|tsx|ts))\*?:?\s*\n)?```(?:html|css|javascript|js|jsx|tsx|react)?(?:\s+(?:filename="?([^"\n]+)"?|([\w./-]+)))?\n([\s\S]*?)(?:```|$)/gi;
     let mdMatch;
-    let index = 0;
-    while ((mdMatch = mdRegex.exec(text)) !== null) {
-      let filename = mdMatch[1] || mdMatch[2];
-      const content = mdMatch[3].trim();
+    while ((mdMatch = mdBlockRegex.exec(text)) !== null) {
+      let rawName = mdMatch[1] || mdMatch[2] || mdMatch[3];
+      let filename = rawName ? cleanFilename(rawName) : '';
+      const content = mdMatch[4].trim();
+
       if (!filename) {
         if (content.includes('import React') || content.includes('useState') || content.includes('export default function') || content.includes('function App')) {
           filename = 'App.jsx';
-        } else if (content.includes('<!DOCTYPE') || content.includes('<html')) {
+        } else if (isHtml(content)) {
           filename = 'index.html';
         } else if (content.includes('{') && (content.includes('margin') || content.includes('padding') || content.includes('color') || content.includes('@tailwind'))) {
           filename = 'styles.css';
         } else {
-          filename = `App.jsx`;
+          filename = 'App.jsx';
         }
       }
+
+      if ((filename === 'App.jsx' || filename === 'App.js') && isHtml(content)) {
+        filename = 'index.html';
+      }
+
       if (content.length > 20) {
         files[filename] = content;
       }
-      index++;
     }
   }
 
-  // Fallback 3: if response contains bare JSX / React code without delimiters or markdown tags
+  // 3. Fallback: bare JSX / React code without delimiters or markdown tags
   if (Object.keys(files).length === 0) {
     if (text.includes('export default function') || text.includes('function App(') || text.includes('const App =') || text.includes('useState(')) {
       const startIdx = text.search(/(?:import\s+React|export\s+default\s+function|function\s+App|const\s+App)/);
@@ -214,7 +224,7 @@ export async function streamGenerateWebsite({
         if (['redo', 'rebuild', 'try again', 'again', 'restart', 'regenerate', 're-do', 'fix'].includes(lower)) {
           content = `User instruction: "${msg.content}". Please re-synthesize and output the full, complete working application code inside <<<FILE:App.jsx>>> and <<<END_FILE>>>. Do NOT reply with plans or commentary alone.`;
         } else {
-          content += "\n\n[Instruction: You must output complete, working code inside <<<FILE:...>>> and <<<END_FILE>>> delimiters.]";
+          content += "\n\n[Instruction: You MUST output complete, working React 18 code inside <<<FILE:App.jsx>>> and <<<END_FILE>>> delimiters. Do NOT output a raw HTML document (<!DOCTYPE html>) inside App.jsx. Use Lucide icons and Tailwind CSS.]";
         }
       }
       formattedMessages.push({

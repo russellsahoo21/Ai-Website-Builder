@@ -123,7 +123,13 @@ export default function App() {
     }
 
     const count = autoFixCountRef.current;
-    const fixPrompt = `A runtime error occurred in the sandbox preview:\n"${errorMsg}"\n\nPlease fix this error in App.jsx. Ensure all context hooks (e.g. useApp, useContext) have safe default values or are called inside their provider, and return the complete corrected App.jsx wrapped in <<<FILE:App.jsx>>> and <<<END_FILE>>>.`;
+    const isHtmlError = errorMsg.includes('<!DOCTYPE') || errorMsg.includes('<html');
+    let fixPrompt = `A runtime error occurred in the sandbox preview:\n"${errorMsg}"\n\n`;
+    if (isHtmlError) {
+      fixPrompt += `The application code was output as raw HTML instead of a React component. Please convert this into a pure React 18 component in App.jsx (using Tailwind CSS and Lucide icons), wrapped in <<<FILE:App.jsx>>> and <<<END_FILE>>>.`;
+    } else {
+      fixPrompt += `Please fix this error in App.jsx. Ensure all context hooks (e.g. useApp, useContext) have safe default values or are called inside their provider, component names do not collide with reserved words, and return the complete corrected App.jsx wrapped in <<<FILE:App.jsx>>> and <<<END_FILE>>>.`;
+    }
 
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -151,7 +157,19 @@ export default function App() {
         currentFiles: filesRef.current,
         signal: abortControllerRef.current.signal,
         onFileParsed: (parsedFiles) => {
-          setFiles(prev => ({ ...prev, ...parsedFiles }));
+          setFiles(prev => {
+            const next = { ...prev, ...parsedFiles };
+            if (parsedFiles['index.html'] && (parsedFiles['index.html'].trim().toLowerCase().startsWith('<!doctype') || parsedFiles['index.html'].trim().toLowerCase().startsWith('<html'))) {
+              delete next['App.jsx'];
+              delete next['App.js'];
+            }
+            if (parsedFiles['App.jsx'] && !parsedFiles['App.jsx'].trim().toLowerCase().startsWith('<!doctype')) {
+              if (next['index.html'] && (next['index.html'].includes('<!DOCTYPE') || next['index.html'].includes('<html'))) {
+                delete next['index.html'];
+              }
+            }
+            return next;
+          });
         },
         onComplete: (fullText, finalFiles) => {
           if (Object.keys(finalFiles).length > 0) {
@@ -219,10 +237,19 @@ export default function App() {
         currentFiles: files,
         signal: abortControllerRef.current.signal,
         onFileParsed: (parsedFiles) => {
-          setFiles(prev => ({
-            ...prev,
-            ...parsedFiles
-          }));
+          setFiles(prev => {
+            const next = { ...prev, ...parsedFiles };
+            if (parsedFiles['index.html'] && (parsedFiles['index.html'].trim().toLowerCase().startsWith('<!doctype') || parsedFiles['index.html'].trim().toLowerCase().startsWith('<html'))) {
+              delete next['App.jsx'];
+              delete next['App.js'];
+            }
+            if (parsedFiles['App.jsx'] && !parsedFiles['App.jsx'].trim().toLowerCase().startsWith('<!doctype')) {
+              if (next['index.html'] && (next['index.html'].includes('<!DOCTYPE') || next['index.html'].includes('<html'))) {
+                delete next['index.html'];
+              }
+            }
+            return next;
+          });
         },
         onComplete: (fullText, finalFiles) => {
           const filesCount = Object.keys(finalFiles).length;
@@ -238,6 +265,11 @@ export default function App() {
             replyText = fullText.split('```')[0].trim();
           } else {
             replyText = fullText.trim();
+          }
+
+          // Filter out markdown headers or filenames that leaked into replyText (e.g. "## 1:index.html")
+          if (/^(?:#{1,4}|\*\*|File:?)\s*(?:[0-9]+[:.]\s*)?[\w./-]+\*?:?$/i.test(replyText.trim())) {
+            replyText = "";
           }
 
           if (!replyText || replyText.length < 5) {
