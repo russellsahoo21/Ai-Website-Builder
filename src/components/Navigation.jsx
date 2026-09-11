@@ -1,6 +1,7 @@
 import React from 'react';
 import { ArrowRight, FolderKanban } from 'lucide-react';
 import { useUser, SignInButton, SignUpButton, UserButton } from '@clerk/react';
+import { dark } from '@clerk/themes';
 
 export default function Navigation({ currentRoute, navigateTo, onOpenProjects, projectCount = 0 }) {
   const { isSignedIn, isLoaded } = useUser();
@@ -90,8 +91,21 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <UserButton 
               afterSignOutUrl="/"
               appearance={{
+                baseTheme: dark,
                 elements: {
                   avatarBox: "w-7 h-7"
+                }
+              }}
+              userProfileProps={{
+                appearance: {
+                  baseTheme: dark,
+                  variables: {
+                    colorBackground: '#0d0f14',
+                    colorNeutral: '#ffffff',
+                    colorForeground: '#ffffff',
+                    colorText: '#ffffff',
+                    colorTextSecondary: '#a1a1aa',
+                  }
                 }
               }}
             />

@@ -55,6 +55,169 @@
    CLERK AUTHENTICATION HIGH-CONTRAST DARK THEME OVERRIDES
    ======================================================== */
 
+/* Root Modal / Dialog / Popover Containers & CSS Variables */
+.cl-rootBox,
+.cl-userProfile-root,
+.cl-modalContent,
+.cl-card,
+.cl-userButtonPopoverCard {
+  --cl-color-background: #0d0f14 !important;
+  --cl-color-foreground: #ffffff !important;
+  --cl-color-neutral: #ffffff !important;
+  --cl-color-text: #ffffff !important;
+  --cl-color-text-secondary: #a1a1aa !important;
+  --cl-color-muted: #1f242d !important;
+  --cl-color-muted-foreground: #a1a1aa !important;
+  background-color: #0d0f14 !important;
+  color: #f4f4f5 !important;
+}
+
+/* UserProfile Modal Backdrop */
+.cl-modalBackdrop {
+  background-color: rgba(0, 0, 0, 0.75) !important;
+  backdrop-filter: blur(4px) !important;
+}
+
+/* Modal Content Card & Outer Shell */
+.cl-card,
+.cl-modalContent {
+  background-color: #0d0f14 !important;
+  border: 1px solid #27272a !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Left Sidebar Navbar in Account Modal */
+.cl-navbar,
+.cl-userProfile-navbar {
+  background-color: #090a0f !important;
+  border-right: 1px solid #27272a !important;
+}
+
+/* Header Titles in Navbar & Pages */
+.cl-navbarTitleText,
+.cl-headerTitle,
+.cl-userProfile-navbar .cl-headerTitle {
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.cl-navbarSubtitleText,
+.cl-headerSubtitle,
+.cl-userProfile-navbar .cl-headerSubtitle {
+  color: #a1a1aa !important;
+}
+
+/* Navbar Nav Item Buttons (Profile, Security, etc.) */
+.cl-navbarButton,
+.cl-userProfile-navbar .cl-navbarButton {
+  color: #a1a1aa !important;
+  border-radius: 6px !important;
+  transition: all 0.15s ease !important;
+}
+
+.cl-navbarButton:hover {
+  color: #ffffff !important;
+  background-color: #181b22 !important;
+}
+
+.cl-navbarButton[data-active="true"],
+.cl-navbarButton.cl-active,
+.cl-navbarButton[aria-selected="true"] {
+  color: #ffffff !important;
+  background-color: #27272a !important;
+  font-weight: 600 !important;
+}
+
+.cl-navbarButtonIcon {
+  color: inherit !important;
+}
+
+/* Profile Section Left Column Labels (Profile, Email addresses, Phone numbers, Connected accounts) */
+.cl-profileSectionTitle,
+.cl-profileSectionTitleText,
+.cl-profileSectionLabel,
+.cl-userProfile-root .cl-profileSectionTitle,
+.cl-userProfile-root .cl-profileSectionTitleText {
+  color: #d4d4d8 !important; /* light zinc-300 */
+  font-weight: 600 !important;
+  font-size: 0.875rem !important;
+}
+
+.cl-profileSectionSubtitle,
+.cl-profileSectionSubtitleText {
+  color: #a1a1aa !important;
+}
+
+/* Profile Section Content (Right Column) */
+.cl-profileSectionContent,
+.cl-profileSectionContent *,
+.cl-profilePage,
+.cl-profilePage * {
+  color: #f4f4f5;
+}
+
+/* Specific text items: email address, connected account names, identity descriptions */
+.cl-identityPreview,
+.cl-identityPreviewText,
+.cl-userPreviewSecondaryIdentifier,
+.cl-connectedAccount,
+.cl-formFieldLabel,
+.cl-formFieldHintText,
+.cl-formFieldErrorText,
+.cl-accordionContent {
+  color: #d4d4d8 !important;
+}
+
+/* Badge (e.g. "Primary" tag next to email) */
+.cl-badge {
+  background-color: #27272a !important;
+  color: #e4e4e7 !important;
+  border: 1px solid #3f3f46 !important;
+  font-size: 0.75rem !important;
+}
+
+/* Disconnected Account Warning Text & Secondary Notices */
+.cl-alert,
+.cl-alertText,
+.cl-alertDescription,
+.cl-userProfile-root [class*="disconnected"],
+.cl-userProfile-root [class*="notice"],
+.cl-userProfile-root [class*="subtitle"],
+.cl-userProfile-root [class*="subtext"] {
+  color: #a1a1aa !important;
+}
+
+/* Primary User Name & Main Identifiers */
+.cl-userPreviewMainIdentifier {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+/* Action Links / Buttons (Update profile, Reconnect, Add email address, Connect account) */
+.cl-profileSectionPrimaryButton,
+.cl-profileSectionPrimaryButtonText,
+.cl-profileSectionAction,
+.cl-button[data-variant="link"],
+.cl-button[data-variant="ghost"] {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+}
+
+.cl-profileSectionPrimaryButton:hover,
+.cl-button[data-variant="link"]:hover {
+  color: #e4e4e7 !important;
+  text-decoration: underline !important;
+}
+
+/* Close Modal Button (X icon) */
+.cl-modalCloseButton {
+  color: #a1a1aa !important;
+}
+
+.cl-modalCloseButton:hover {
+  color: #ffffff !important;
+}
+
 /* UserButton Popover Card */
 .cl-userButtonPopoverCard {
   background-color: #0d0f14 !important;
@@ -62,18 +225,6 @@
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6) !important;
 }
 
-/* Primary User Name */
-.cl-userPreviewMainIdentifier {
-  color: #ffffff !important;
-  font-weight: 600 !important;
-}
-
-/* Secondary User Email */
-.cl-userPreviewSecondaryIdentifier {
-  color: #a1a1aa !important;
-}
-
-/* Action Buttons (Manage account, Sign out) */
 .cl-userButtonPopoverActionButton {
   color: #e4e4e7 !important;
   border-radius: 6px !important;
@@ -89,10 +240,6 @@
   font-weight: 500 !important;
 }
 
-.cl-userButtonPopoverActionButton:hover .cl-userButtonPopoverActionButtonText {
-  color: #ffffff !important;
-}
-
 .cl-userButtonPopoverActionButtonIcon {
   color: #a1a1aa !important;
 }
@@ -101,28 +248,10 @@
   color: #ffffff !important;
 }
 
-/* Clerk Modals & Cards */
-.cl-card,
-.cl-modalContent {
-  background-color: #0d0f14 !important;
-  border: 1px solid #27272a !important;
-  color: #f4f4f5 !important;
-}
-
-.cl-headerTitle {
-  color: #ffffff !important;
-}
-
-.cl-headerSubtitle,
-.cl-formFieldLabel,
-.cl-dividerText,
-.cl-footerActionText {
-  color: #a1a1aa !important;
-}
-
+/* Inputs & Form Elements */
 .cl-formFieldInput {
   background-color: #181b22 !important;
-  border-color: #27272a !important;
+  border: 1px solid #27272a !important;
   color: #ffffff !important;
 }
 
@@ -132,7 +261,33 @@
   font-weight: 600 !important;
 }
 
+.cl-formButtonPrimary:hover {
+  background-color: #e4e4e7 !important;
+}
+
+/* Divider & Footer Elements */
+.cl-dividerLine {
+  background-color: #27272a !important;
+}
+
+.cl-dividerText,
+.cl-footerActionText {
+  color: #a1a1aa !important;
+}
+
 .cl-footerActionLink {
   color: #ffffff !important;
+}
+
+/* Catch-all safety: ensure NO text in Clerk modals falls back to dark color */
+.cl-userProfile-root p,
+.cl-userProfile-root span,
+.cl-userProfile-root label,
+.cl-userProfile-root div,
+.cl-userProfile-root h1,
+.cl-userProfile-root h2,
+.cl-userProfile-root h3,
+.cl-userProfile-root h4 {
+  color: inherit;
 }
 
