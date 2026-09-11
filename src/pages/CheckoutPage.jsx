@@ -19,7 +19,7 @@ import {
 import { useUser } from '@clerk/react';
 
 // Pricing Configurations matching the landing page & blueprint
-export const CHECKOUT_PLANS = {
+const CHECKOUT_PLANS = {
   pro: {
     id: 'pro',
     name: 'Pro Founder',
