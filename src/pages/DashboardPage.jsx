@@ -1,5 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { 
+  Eye,
+  Monitor,
+  Tablet,
+  Smartphone,
+  X,
   FolderKanban, 
   Plus, 
   Search, 
@@ -98,8 +103,15 @@ const MODULAR_COMPONENTS = [
 
 
 function ProjectPreviewThumbnail({ files, title, onQuickPreview, onOpenStudio }) {
-  const doc = useMemo(() => buildPreviewDoc(files || {}), [files]);
-  const hasFiles = Object.keys(files || {}).length > 0 && doc;
+  const doc = useMemo(() => {
+    try {
+      return files ? buildPreviewDoc(files) : '';
+    } catch (err) {
+      console.warn('[ProjectPreviewThumbnail doc error]', err);
+      return '';
+    }
+  }, [files]);
+  const hasFiles = Boolean(files && Object.keys(files).length > 0 && doc);
 
   return (
     <div className="relative w-full h-44 bg-[#090b10] rounded-xl overflow-hidden border border-zinc-800/80 mb-3 group/thumb">
@@ -1513,7 +1525,7 @@ npm run dev
                   : 'w-full'
               }`}>
                 <iframe
-                  srcDoc={buildPreviewDoc(previewModalProject.files || {})}
+                  srcDoc={(() => { try { return buildPreviewDoc(previewModalProject.files || {}); } catch { return ''; } })()}
                   title={previewModalProject.name}
                   sandbox="allow-scripts allow-forms allow-same-origin allow-modals"
                   className="w-full h-full border-0 bg-white"
