@@ -2,6 +2,7 @@
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
 import LandingPage from './pages/LandingPage';
+import DashboardPage from './pages/DashboardPage';
 import TemplatesPage from './pages/TemplatesPage';
 import ShowcasePage from './pages/ShowcasePage';
 import IntegrationsPage from './pages/IntegrationsPage';
@@ -13,7 +14,6 @@ import ChatPanel from './components/ChatPanel';
 import PreviewPanel from './components/PreviewPanel';
 import CodeInspector from './components/CodeInspector';
 import SettingsModal from './components/SettingsModal';
-import ProjectsModal from './components/ProjectsModal';
 import { useUser, useClerk } from '@clerk/react';
 import { DEFAULT_MODEL, AVAILABLE_MODELS } from './services/aiService';
 import { useGeneration } from './hooks/useGeneration';
@@ -35,7 +35,7 @@ import {
 
 function getRouteFromHash() {
   const hash = window.location.hash.replace('#/', '').replace('#', '');
-  const valid = ['templates', 'showcase', 'integrations', 'changelog', 'pricing', 'docs', 'studio'];
+  const valid = ['templates', 'showcase', 'integrations', 'changelog', 'pricing', 'docs', 'studio', 'dashboard'];
   return valid.includes(hash) ? hash : 'landing';
 }
 
@@ -50,7 +50,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('preview');
   const [viewport, setViewport] = useState('desktop');
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   // — Configuration —
@@ -150,7 +149,7 @@ export default function App() {
   useEffect(() => {
     const onHash = () => {
       const target = getRouteFromHash();
-      if (target === 'studio' && isLoaded && !isSignedIn) {
+      if ((target === 'studio' || target === 'dashboard') && isLoaded && !isSignedIn) {
         clerk.openSignIn();
         setCurrentRoute('landing');
         window.location.hash = '';
@@ -163,7 +162,10 @@ export default function App() {
   }, [isSignedIn, isLoaded, clerk]);
 
   const navigateTo = (route) => {
-    if (route === 'studio' && !isSignedIn) { clerk.openSignIn(); return; }
+    if ((route === 'studio' || route === 'dashboard') && !isSignedIn) { 
+      clerk.openSignIn(); 
+      return; 
+    }
     setCurrentRoute(route);
     window.location.hash = route === 'landing' ? '' : `/${route}`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -211,6 +213,16 @@ export default function App() {
     if (cloned) {
       setProjects(getAllProjects());
       handleSelectProject(cloned);
+    }
+  };
+
+  const handleRenameProject = (id, newName) => {
+    const proj = projects.find(p => p.id === id);
+    if (proj) {
+      const updated = saveProject({ ...proj, name: newName });
+      if (updated) {
+        setProjects(prev => prev.map(p => p.id === id ? updated : p));
+      }
     }
   };
 
@@ -308,7 +320,7 @@ export default function App() {
           onOpenNewTab={handleOpenNewTab}
           onDownloadZip={() => downloadProjectZip(files, activeProject?.name || 'aethercraft-app')}
           onOpenSettings={() => setIsSettingsOpen(true)}
-          onOpenProjects={() => setIsProjectsModalOpen(true)}
+          onOpenProjects={() => navigateTo('dashboard')}
           projectCount={projects.length}
           activeProjectName={activeProject?.name || ''}
           onBackToHome={() => navigateTo('landing')}
@@ -355,28 +367,16 @@ export default function App() {
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
         />
-
-        <ProjectsModal
-          isOpen={isProjectsModalOpen}
-          onClose={() => setIsProjectsModalOpen(false)}
-          projects={projects}
-          activeProjectId={activeProjectId}
-          onSelectProject={handleSelectProject}
-          onCreateNewProject={() => handleCreateNewProject('New Project', '')}
-          onDeleteProject={handleDeleteProject}
-          onDuplicateProject={handleDuplicateProject}
-        />
       </div>
     );
   }
 
-  // ── Public Pages ─────────────────────────────────────────────────────────
+  // ── Public & Platform Pages ──────────────────────────────────────────────
   return (
-    <div className="min-h-screen flex flex-col bg-[#090a0d] text-zinc-100 font-sans">
+    <div className="min-h-screen flex flex-col bg-[#080a0f] text-zinc-100 font-sans">
       <Navigation 
         currentRoute={currentRoute} 
         navigateTo={navigateTo} 
-        onOpenProjects={() => setIsProjectsModalOpen(true)}
         projectCount={projects.length}
       />
 
@@ -386,6 +386,29 @@ export default function App() {
             navigateTo={navigateTo} 
             onLaunchWithPrompt={handleLaunchWithPrompt} 
             onLoadTemplate={handleLoadTemplate} 
+          />
+        )}
+        {currentRoute === 'dashboard' && (
+          <DashboardPage
+            projects={projects}
+            activeProjectId={activeProjectId}
+            onSelectProject={(project) => {
+              handleSelectProject(project);
+              navigateTo('studio');
+            }}
+            onCreateNewProject={(name, prompt) => {
+              handleCreateNewProject(name, prompt);
+              navigateTo('studio');
+            }}
+            onDeleteProject={handleDeleteProject}
+            onDuplicateProject={handleDuplicateProject}
+            onRenameProject={handleRenameProject}
+            onLoadTemplate={(tmpl) => {
+              handleLoadTemplate(tmpl);
+              navigateTo('studio');
+            }}
+            onLaunchWithPrompt={handleLaunchWithPrompt}
+            navigateTo={navigateTo}
           />
         )}
         {currentRoute === 'templates' && (
@@ -409,23 +432,6 @@ export default function App() {
         setApiKey={setApiKey}
         selectedModel={selectedModel}
         setSelectedModel={setSelectedModel}
-      />
-
-      <ProjectsModal
-        isOpen={isProjectsModalOpen}
-        onClose={() => setIsProjectsModalOpen(false)}
-        projects={projects}
-        activeProjectId={activeProjectId}
-        onSelectProject={(project) => {
-          handleSelectProject(project);
-          navigateTo('studio');
-        }}
-        onCreateNewProject={() => {
-          handleCreateNewProject('New Project', '');
-          navigateTo('studio');
-        }}
-        onDeleteProject={handleDeleteProject}
-        onDuplicateProject={handleDuplicateProject}
       />
     </div>
   );

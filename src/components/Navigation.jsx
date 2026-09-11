@@ -24,6 +24,14 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
 
           {/* Clean Text-Only Links */}
           <div className="hidden md:flex items-center gap-6 text-xs text-zinc-400">
+            {isSignedIn && (
+              <button
+                onClick={() => navigateTo('dashboard')}
+                className={`transition hover:text-white ${currentRoute === 'dashboard' ? 'text-white font-medium text-cyan-400' : ''}`}
+              >
+                Dashboard
+              </button>
+            )}
             <button
               onClick={() => navigateTo('templates')}
               className={`transition hover:text-white ${currentRoute === 'templates' ? 'text-white font-medium' : ''}`}
@@ -99,12 +107,16 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           ) : (
             <div className="flex items-center gap-2">
               <button
-                onClick={onOpenProjects}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-xs font-medium text-zinc-300 hover:text-white transition border border-zinc-800"
-                title="View All Projects"
+                onClick={() => navigateTo('dashboard')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition border ${
+                  currentRoute === 'dashboard'
+                    ? 'bg-zinc-800 text-white border-zinc-700'
+                    : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white border-zinc-800'
+                }`}
+                title="Go to Projects Dashboard"
               >
                 <FolderKanban className="w-3.5 h-3.5 text-cyan-400" />
-                <span>Projects</span>
+                <span>Dashboard</span>
                 {projectCount > 0 && (
                   <span className="px-1.5 py-0.2 rounded-full bg-zinc-800 text-[10px] text-zinc-400 font-mono">
                     {projectCount}
