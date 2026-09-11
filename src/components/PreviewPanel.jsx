@@ -3,7 +3,7 @@ import SatisfyingLoader from './SatisfyingLoader';
 import SandboxIframe from '../sandbox/SandboxIframe';
 import { buildPreviewDoc } from '../utils/previewBuilder';
 
-export default function PreviewPanel({ files, viewport, keyTrigger, isGenerating, promptText, onCancel, onSandboxError }) {
+export default function PreviewPanel({ files, viewport, keyTrigger, isGenerating, telemetry, promptText, onCancel, onSandboxError }) {
   const getViewportClass = () => {
     switch (viewport) {
       case 'mobile': return 'w-[375px] h-[667px] my-auto rounded-[36px] border-[10px] border-zinc-800 shadow-2xl';
@@ -32,7 +32,7 @@ export default function PreviewPanel({ files, viewport, keyTrigger, isGenerating
     <div className="relative w-full h-full flex flex-col items-center justify-center bg-[#07090e] overflow-hidden p-2 sm:p-4">
       {shouldShowLoader ? (
         <div className="w-full h-full animate-fadeIn flex items-center justify-center">
-          <SatisfyingLoader promptText={promptText} onCancel={onCancel} />
+          <SatisfyingLoader promptText={promptText} onCancel={onCancel} telemetry={telemetry} />
         </div>
       ) : !hasFiles ? (
         <div className="w-full h-full flex flex-col items-center justify-center text-center p-8 select-none">

@@ -131,7 +131,7 @@ export default function App() {
   const onRefresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
 
   // — Generation hook —
-  const { handleSendMessage, handleCancelGeneration, executeAutoFix } = useGeneration({
+  const { handleSendMessage, handleCancelGeneration, executeAutoFix, telemetry } = useGeneration({
     apiKey,
     selectedModel,
     filesRef,
@@ -382,6 +382,7 @@ export default function App() {
                 viewport={viewport}
                 keyTrigger={refreshTrigger}
                 isGenerating={isGenerating}
+                telemetry={telemetry}
                 onCancel={handleCancelGeneration}
                 promptText={messages.slice().reverse().find(m => m.role === 'user')?.content || ''}
                 onSandboxError={(msg) => executeAutoFix(msg, false)}

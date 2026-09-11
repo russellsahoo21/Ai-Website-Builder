@@ -1,51 +1,83 @@
 import React, { useState, useEffect } from 'react';
 import { Terminal, Cpu, Activity, CheckCircle2, ShieldCheck, Box } from 'lucide-react';
 
-const COMPILATION_PHASES = [
-  { id: 1, name: "Deconstructing prompt & layout hierarchy", time: 0 },
-  { id: 2, name: "Synthesizing semantic HTML5 & responsive grid", time: 3 },
-  { id: 3, name: "Configuring Tailwind design system & tokens", time: 6 },
-  { id: 4, name: "Injecting interactive JavaScript controllers & state", time: 10 },
-  { id: 5, name: "Mounting isolated client-side sandbox runtime", time: 14 }
-];
-
-const CODE_STREAM_SNIPPETS = [
-  "const engine = AetherCraft.sandbox.createEnvironment();",
-  "<div class=\"w-full max-w-7xl mx-auto px-6 py-12\">",
-  "tailwind.config = { theme: { extend: { colors: { ... } } } };",
-  "document.querySelectorAll('[data-interactive]').forEach(initController);",
-  "renderChart({ type: 'portfolio', resolution: 'high-precision' });",
-  "window.addEventListener('DOMContentLoaded', () => sandbox.mount());",
-  "bundle.optimize({ minified: false, hotReload: true });",
-  "<<<FILE:index.html>>> compiling DOM tree [OK]",
-  "<<<FILE:styles.css>>> compiling custom keyframes [OK]",
-  "<<<FILE:script.js>>> assembling interactive event listeners [OK]"
-];
-
-export default function SatisfyingLoader({ promptText, onCancel }) {
+export default function SatisfyingLoader({ promptText, onCancel, telemetry = {} }) {
   const [elapsed, setElapsed] = useState(0);
-  const [activeSnippetIdx, setActiveSnippetIdx] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => {
       setElapsed(prev => prev + 1);
     }, 1000);
 
-    const snippetTimer = setInterval(() => {
-      setActiveSnippetIdx(prev => (prev + 1) % CODE_STREAM_SNIPPETS.length);
-    }, 1400);
-
     return () => {
       clearInterval(timer);
-      clearInterval(snippetTimer);
     };
   }, []);
 
-  // Calculate current active phase
-  const currentPhaseIndex = COMPILATION_PHASES.slice().reverse().find(p => elapsed >= p.time)?.id || 1;
+  const tokens = telemetry?.tokens || 0;
+  const bytes = telemetry?.bytes || 0;
+  const status = telemetry?.status || 'connecting'; // 'connecting' | 'streaming' | 'compiling' | 'idle'
+  const activeFile = telemetry?.activeFile || 'src/App.jsx';
+  const latestLine = telemetry?.latestLine || '';
 
-  // Estimated progress percentage based on 18s typical cycle
-  const progressPercent = Math.min(95, Math.floor(15 + (elapsed * 4.5)));
+  // Calculate real compilation progress based on active stream
+  let progressPercent = 15;
+  if (status === 'connecting') {
+    progressPercent = Math.min(25, 12 + elapsed * 2);
+  } else if (status === 'streaming') {
+    // Smoothly scale progress with actual tokens received (typical React app is 1200-2500 tokens)
+    const tokenProgress = Math.floor(tokens / 25);
+    progressPercent = Math.min(92, 25 + tokenProgress);
+  } else if (status === 'compiling') {
+    progressPercent = 96;
+  }
+
+  // Dynamic real compilation phases based on live telemetry
+  const phases = [
+    {
+      id: 1,
+      name: "OpenRouter Gateway Handshake & Security Auth",
+      isDone: tokens > 0 || status === 'streaming' || status === 'compiling',
+      isActive: status === 'connecting' || (tokens === 0 && elapsed < 4),
+    },
+    {
+      id: 2,
+      name: tokens > 0 
+        ? `Streaming React 18 & Tailwind Tokens (${tokens.toLocaleString()} tokens received)`
+        : "Awaiting LLM response stream from OpenRouter...",
+      isDone: status === 'compiling',
+      isActive: status === 'streaming' && tokens > 0,
+    },
+    {
+      id: 3,
+      name: activeFile
+        ? `Deconstructing Layout & Assembling ${activeFile}`
+        : "Deconstructing prompt & modular layout hierarchy",
+      isDone: status === 'compiling' || (telemetry?.parsedFilesCount || 0) > 1,
+      isActive: status === 'streaming' && tokens > 150,
+    },
+    {
+      id: 4,
+      name: "Babel Standalone JSX AST Compilation & Lucide Shims",
+      isDone: false,
+      isActive: status === 'compiling',
+    },
+    {
+      id: 5,
+      name: "Mounting isolated client-side sandbox runtime",
+      isDone: false,
+      isActive: status === 'compiling',
+    }
+  ];
+
+  // Dynamic live stream buffer snippet
+  const streamSnippet = latestLine.trim().length > 0
+    ? latestLine
+    : status === 'connecting'
+      ? '[HTTP 200] Awaiting first token from OpenRouter gateway...'
+      : status === 'compiling'
+        ? '[BABEL] Compiling React 18 AST and injecting Tailwind CDN...'
+        : 'Synthesizing application code into live sandbox...';
 
   return (
     <div className="relative w-full h-full flex flex-col items-center justify-center bg-[#07090e] overflow-hidden select-none font-sans">
@@ -115,12 +147,16 @@ export default function SatisfyingLoader({ promptText, onCancel }) {
           )}
         </div>
 
-        {/* Progress Bar with Shimmer */}
+        {/* Progress Bar with Real Telemetry */}
         <div className="w-full mb-6">
           <div className="flex justify-between items-center text-[11px] font-mono text-zinc-400 mb-2">
             <span className="flex items-center gap-1.5">
               <Activity className="w-3.5 h-3.5 text-zinc-300" />
-              <span>Compilation Telemetry</span>
+              <span>
+                {tokens > 0 
+                  ? `${tokens.toLocaleString()} tokens • ${(bytes / 1024).toFixed(1)} KB`
+                  : 'Compilation Telemetry'}
+              </span>
             </span>
             <span className="text-zinc-200 font-bold">{progressPercent}%</span>
           </div>
@@ -132,12 +168,12 @@ export default function SatisfyingLoader({ promptText, onCancel }) {
           </div>
         </div>
 
-        {/* Interactive Compilation Phases */}
+        {/* Interactive Dynamic Compilation Phases */}
         <div className="w-full rounded-xl bg-zinc-900/80 border border-zinc-800/80 p-3.5 mb-4 shadow-xl backdrop-blur-sm">
           <div className="space-y-2">
-            {COMPILATION_PHASES.map((phase) => {
-              const isDone = phase.id < currentPhaseIndex;
-              const isCurrent = phase.id === currentPhaseIndex;
+            {phases.map((phase) => {
+              const isDone = phase.isDone;
+              const isCurrent = phase.isActive;
 
               return (
                 <div 
@@ -152,7 +188,7 @@ export default function SatisfyingLoader({ promptText, onCancel }) {
                 >
                   <div className="w-4 h-4 flex items-center justify-center">
                     {isDone ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-zinc-300" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
                     ) : isCurrent ? (
                       <div className="w-2 h-2 rounded-full bg-white animate-ping" />
                     ) : (
@@ -172,7 +208,7 @@ export default function SatisfyingLoader({ promptText, onCancel }) {
           </div>
         </div>
 
-        {/* Real-time Code Stream Terminal Ticker */}
+        {/* Real-time Code Stream Terminal Ticker (LIVE FROM OPENROUTER) */}
         <div className="w-full rounded-xl bg-black/80 border border-zinc-800/80 p-3 shadow-inner">
           <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500 mb-2 border-b border-zinc-800 pb-1.5">
             <div className="flex items-center gap-1.5">
@@ -181,12 +217,12 @@ export default function SatisfyingLoader({ promptText, onCancel }) {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              <span className="text-zinc-400">READY</span>
+              <span className="text-zinc-400">{tokens > 0 ? `${tokens} TOKENS` : 'READY'}</span>
             </div>
           </div>
           <div className="font-mono text-[11px] text-zinc-300 truncate h-5 flex items-center">
             <span className="text-zinc-600 mr-2">&gt;</span>
-            <span className="animate-fadeIn">{CODE_STREAM_SNIPPETS[activeSnippetIdx]}</span>
+            <span className="animate-fadeIn truncate">{streamSnippet}</span>
           </div>
         </div>
 

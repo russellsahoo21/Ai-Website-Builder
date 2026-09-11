@@ -1,4 +1,4 @@
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { streamGenerateWebsite } from '../services/aiService.js';
 import { parseGeneratedFiles } from '../services/fileParser.js';
 import { getFriendlyMessage, isRecoverable, buildFixPrompt } from '../sandbox/errorReporter.js';
@@ -39,10 +39,27 @@ export function useGeneration({
   const autoFixCountRef = useRef(0);
   const isGeneratingRef = useRef(false);
 
+  const [telemetry, setTelemetry] = useState({
+    status: 'idle',
+    tokens: 0,
+    bytes: 0,
+    latestLine: '',
+    activeFile: 'src/App.jsx',
+    parsedFilesCount: 0,
+  });
+
   const handleCancelGeneration = useCallback(() => {
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     isGeneratingRef.current = false;
+    setTelemetry({
+      status: 'idle',
+      tokens: 0,
+      bytes: 0,
+      latestLine: '',
+      activeFile: 'src/App.jsx',
+      parsedFilesCount: 0,
+    });
     setIsGenerating(false);
   }, [setIsGenerating]);
 
@@ -107,6 +124,23 @@ export function useGeneration({
         messages: [...currentMessages, { role: 'user', content: fixPrompt }],
         currentFiles,
         signal: abortControllerRef.current.signal,
+        onChunk: (delta, fullText) => {
+          const lines = fullText.split('\n');
+          const lastLine = lines.slice(-2).find(l => l.trim().length > 0) || '';
+          const fileMatch = fullText.match(/<<<FILE:\s*([^\r\n>]+)/g);
+          const activeFile = fileMatch 
+            ? fileMatch[fileMatch.length - 1].replace(/<<<FILE:\s*/, '').replace(/>>>/, '').trim() 
+            : 'src/App.jsx';
+
+          setTelemetry({
+            status: 'streaming',
+            tokens: Math.round(fullText.length / 3.8),
+            bytes: fullText.length,
+            latestLine: lastLine.trim().slice(0, 95),
+            activeFile,
+            parsedFilesCount: fileMatch ? fileMatch.length : 1,
+          });
+        },
         onFileParsed: (parsedResult) => {
           const { merged, needsConversion } = mergeFiles(parsedResult, filesRef.current);
           if (needsConversion) { conversionNeeded = true; return; }
@@ -168,6 +202,15 @@ export function useGeneration({
       { role: 'user', content: promptToSend }
     ];
 
+    setTelemetry({
+      status: 'connecting',
+      tokens: 0,
+      bytes: 0,
+      latestLine: 'Awaiting first token from OpenRouter gateway...',
+      activeFile: 'src/App.jsx',
+      parsedFilesCount: 0,
+    });
+
     try {
       let conversionNeeded = false;
 
@@ -177,6 +220,23 @@ export function useGeneration({
         messages: messagesForEngine,
         currentFiles: filesRef.current,
         signal: abortControllerRef.current.signal,
+        onChunk: (delta, fullText) => {
+          const lines = fullText.split('\n');
+          const lastLine = lines.slice(-2).find(l => l.trim().length > 0) || '';
+          const fileMatch = fullText.match(/<<<FILE:\s*([^\r\n>]+)/g);
+          const activeFile = fileMatch 
+            ? fileMatch[fileMatch.length - 1].replace(/<<<FILE:\s*/, '').replace(/>>>/, '').trim() 
+            : 'src/App.jsx';
+
+          setTelemetry({
+            status: 'streaming',
+            tokens: Math.round(fullText.length / 3.8),
+            bytes: fullText.length,
+            latestLine: lastLine.trim().slice(0, 95),
+            activeFile,
+            parsedFilesCount: fileMatch ? fileMatch.length : 1,
+          });
+        },
         onFileParsed: (parsedResult) => {
           const { merged, needsConversion } = mergeFiles(parsedResult, filesRef.current);
           if (needsConversion) { conversionNeeded = true; return; }
@@ -233,6 +293,11 @@ export function useGeneration({
           }
 
           setMessages(prev => [...prev, { role: 'ai', content: replyText }]);
+          setTelemetry(prev => ({
+            ...prev,
+            status: 'compiling',
+            latestLine: 'Mounting application into sandboxed React 18 virtual DOM...'
+          }));
           isGeneratingRef.current = false;
           setIsGenerating(false);
           onRefresh();
@@ -247,6 +312,14 @@ export function useGeneration({
 
           isGeneratingRef.current = false;
           setIsGenerating(false);
+          setTelemetry({
+            status: 'idle',
+            tokens: 0,
+            bytes: 0,
+            latestLine: '',
+            activeFile: 'src/App.jsx',
+            parsedFilesCount: 0,
+          });
 
           if (friendly && !recoverable) {
             // Only show non-recoverable errors (auth, network) — everything else silent
@@ -258,6 +331,14 @@ export function useGeneration({
     } catch (err) {
       isGeneratingRef.current = false;
       setIsGenerating(false);
+      setTelemetry({
+        status: 'idle',
+        tokens: 0,
+        bytes: 0,
+        latestLine: '',
+        activeFile: 'src/App.jsx',
+        parsedFilesCount: 0,
+      });
       console.error('[handleSendMessage caught]', err.message);
     }
 
@@ -270,5 +351,6 @@ export function useGeneration({
     executeAutoFix,
     abortControllerRef,
     autoFixCountRef,
+    telemetry,
   };
 }
