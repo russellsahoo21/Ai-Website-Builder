@@ -2,6 +2,7 @@
  * Production-ready templates showcasing instant capabilities
  */
 import { ensureStandardReactStructure } from '../utils/projectStructure.js';
+import { COOL_TEMPLATES } from './coolTemplates.js';
 
 const RAW_TEMPLATES = [
   {
@@ -1051,7 +1052,7 @@ document.getElementById('add-to-cart-btn')?.addEventListener('click', () => {
   }
 ];
 
-export const STARTER_TEMPLATES = RAW_TEMPLATES.map(tmpl => ({
+export const STARTER_TEMPLATES = [...RAW_TEMPLATES, ...COOL_TEMPLATES].map(tmpl => ({
   ...tmpl,
   files: ensureStandardReactStructure(tmpl.files || {}, tmpl.name)
 }));

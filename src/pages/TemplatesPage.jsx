@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { Layers, Search, Star, ArrowRight, Sparkles, Filter } from 'lucide-react';
+import { Layers, Search, Star, ArrowRight, Sparkles, Filter, ExternalLink } from 'lucide-react';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates';
 
-const CATEGORIES = ["All", "React Web Apps", "SaaS & AI", "Real Estate", "E-Commerce", "Dashboards"];
+const CATEGORIES = ["All", "Gaming & Media", "React Web Apps", "SaaS & AI", "Real Estate", "E-Commerce", "Dashboards"];
 
 export default function TemplatesPage({ onLoadTemplate, navigateTo }) {
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -99,7 +99,22 @@ export default function TemplatesPage({ onLoadTemplate, navigateTo }) {
             </div>
 
             <div className="p-5 bg-zinc-900/40 border-t border-zinc-800 flex items-center justify-between">
-              <span className="text-xs text-zinc-500">By {tmpl.author}</span>
+              <div className="text-xs text-zinc-400">
+                {tmpl.sourceUrl ? (
+                  <a
+                    href={tmpl.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-white hover:underline flex items-center gap-1 transition"
+                    title={`View original repo by ${tmpl.author}`}
+                  >
+                    <span>By {tmpl.author}</span>
+                    <ExternalLink className="w-3 h-3 text-zinc-500" />
+                  </a>
+                ) : (
+                  <span>By {tmpl.author}</span>
+                )}
+              </div>
               <button
                 onClick={() => onLoadTemplate(tmpl)}
                 className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-xs font-semibold text-black transition shadow-sm"
