@@ -6,9 +6,11 @@ import {
   Trash2,
   ChevronRight,
   Sparkles,
-  Square
+  Square,
+  Zap
 } from 'lucide-react';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates';
+import { getCuratedExampleSpec, enhanceUserPrompt } from '../utils/promptEnhancer';
 
 const PROMPT_SUGGESTIONS = [
   "Build a luxury modern real estate website with mortgage calculator",
@@ -27,6 +29,7 @@ export default function ChatPanel({
 }) {
   const [input, setInput] = useState('');
   const [elapsed, setElapsed] = useState(0);
+  const [enhancerEnabled, setEnhancerEnabled] = useState(true);
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
@@ -49,7 +52,13 @@ export default function ChatPanel({
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!input.trim() || isGenerating) return;
-    onSendMessage(input.trim());
+    const userText = input.trim();
+    if (enhancerEnabled) {
+      const enriched = getCuratedExampleSpec(userText) || enhanceUserPrompt(userText);
+      onSendMessage(userText, enriched);
+    } else {
+      onSendMessage(userText, userText);
+    }
     setInput('');
   };
 
@@ -185,27 +194,46 @@ export default function ChatPanel({
       </div>
 
       {/* Input */}
-      <div className="p-3 border-t border-zinc-800 bg-[#090a0d]">
-        <form onSubmit={handleSubmit} className="relative">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isGenerating}
-            placeholder="Type instructions or describe your changes..."
-            rows={3}
-            className="w-full px-3 py-2 pr-9 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder-zinc-600 text-xs focus:border-zinc-500 focus:outline-none transition resize-none font-mono"
-          />
+      <div className="border-t border-zinc-800 bg-[#090a0d]">
+        <div className="flex items-center justify-between px-3 py-1.5 bg-[#0e1017] border-b border-zinc-800/80 text-[11px]">
           <button
-            type="submit"
-            disabled={!input.trim() || isGenerating}
-            className="absolute right-2 bottom-3 p-1 rounded bg-white hover:bg-zinc-200 disabled:opacity-20 text-black transition"
+            type="button"
+            onClick={() => setEnhancerEnabled(prev => !prev)}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full transition cursor-pointer border ${
+              enhancerEnabled 
+                ? 'bg-indigo-500/15 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/25' 
+                : 'bg-zinc-800/60 border-zinc-700/60 text-zinc-500 hover:text-zinc-400'
+            }`}
+            title={enhancerEnabled ? "Smart Prompt Enhancer active (enriches user prompts with full React specs)" : "Smart Prompt Enhancer paused"}
           >
-            <Send className="w-3 h-3" />
+            <Zap className={`w-3 h-3 ${enhancerEnabled ? 'text-indigo-400 fill-indigo-400/30' : 'text-zinc-500'}`} />
+            <span className="font-medium text-[10px]">{enhancerEnabled ? '⚡ Prompt Enhancer: Active' : 'Prompt Enhancer: Off'}</span>
           </button>
-        </form>
-        <div className="mt-1 text-[10px] font-mono text-zinc-500 text-right">
-          Enter to send
+          <span className="text-[10px] text-zinc-500 font-mono">React 18 Engine</span>
+        </div>
+
+        <div className="p-3">
+          <form onSubmit={handleSubmit} className="relative">
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isGenerating}
+              placeholder="Type instructions or describe your changes..."
+              rows={3}
+              className="w-full px-3 py-2 pr-9 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-100 placeholder-zinc-600 text-xs focus:border-zinc-500 focus:outline-none transition resize-none font-mono"
+            />
+            <button
+              type="submit"
+              disabled={!input.trim() || isGenerating}
+              className="absolute right-2 bottom-3 p-1 rounded bg-white hover:bg-zinc-200 disabled:opacity-20 text-black transition cursor-pointer"
+            >
+              <Send className="w-3 h-3" />
+            </button>
+          </form>
+          <div className="mt-1 text-[10px] font-mono text-zinc-500 text-right">
+            Enter to send
+          </div>
         </div>
       </div>
     </div>

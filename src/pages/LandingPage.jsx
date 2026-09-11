@@ -3,10 +3,13 @@ import {
   ArrowRight, 
   Terminal, 
   Check, 
-  ChevronDown
+  ChevronDown,
+  CheckCircle2,
+  Tag
 } from 'lucide-react';
 import { useUser, SignUpButton, SignInButton } from '@clerk/react';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates';
+import { getCuratedExampleSpec, enhanceUserPrompt } from '../utils/promptEnhancer';
 
 const TYPEWRITER_PHRASES = [
   "a modern fintech app with interactive portfolio charts...",
@@ -78,7 +81,8 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
     e.preventDefault();
     const promptToUse = heroPrompt.trim() || placeholderText.replace('...', '');
     if (!promptToUse) return;
-    onLaunchWithPrompt(promptToUse);
+    const detailedSpec = getCuratedExampleSpec(promptToUse) || enhanceUserPrompt(promptToUse);
+    onLaunchWithPrompt(promptToUse, detailedSpec);
   };
 
   return (
@@ -160,7 +164,8 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
                   type="button"
                   onClick={() => {
                     setHeroPrompt(cleaned);
-                    onLaunchWithPrompt(cleaned);
+                    const detailedSpec = getCuratedExampleSpec(cleaned) || enhanceUserPrompt(cleaned);
+                    onLaunchWithPrompt(cleaned, detailedSpec);
                   }}
                   className="px-3 py-1.5 rounded-md bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition text-xs font-mono cursor-pointer"
                 >
@@ -364,97 +369,186 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
       </section>
 
       {/* Transparent Pricing Section */}
-      <section className="max-w-6xl mx-auto px-6 py-20 border-t border-zinc-800/80">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold text-white mb-2">Plans & Pricing</h2>
-          <p className="text-xs text-zinc-400">Simple, predictable developer pricing.</p>
+      <section className="max-w-7xl mx-auto px-6 py-20 border-t border-zinc-800/80">
+        <div className="text-center max-w-2xl mx-auto mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 text-xs font-semibold mb-4">
+            <Tag className="w-3.5 h-3.5" />
+            <span>Flexible Plans for Every Creator</span>
+          </div>
+          <h2 className="text-4xl sm:text-5xl font-black text-white tracking-tight mb-4">
+            Simple, Transparent Pricing
+          </h2>
+          <p className="text-slate-400 text-sm">
+            Start for free with open models. Scale as your creations turn into profitable businesses.
+          </p>
 
-          <div className="inline-flex items-center p-1 rounded-lg bg-zinc-900 border border-zinc-800 mt-6 text-xs">
+          {/* Toggle */}
+          <div className="inline-flex items-center p-1 rounded-xl bg-white/5 border border-white/10 mt-8">
             <button
               onClick={() => setBillingCycle('monthly')}
-              className={`px-3.5 py-1.5 rounded-md transition ${billingCycle === 'monthly' ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-400'}`}
+              className={`px-5 py-2 rounded-lg text-xs font-semibold transition ${
+                billingCycle === 'monthly' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
             >
-              Monthly
+              Monthly Billing
             </button>
             <button
               onClick={() => setBillingCycle('annual')}
-              className={`px-3.5 py-1.5 rounded-md transition flex items-center gap-1.5 ${billingCycle === 'annual' ? 'bg-zinc-800 text-white font-medium' : 'text-zinc-400'}`}
+              className={`px-5 py-2 rounded-lg text-xs font-semibold transition flex items-center gap-1.5 ${
+                billingCycle === 'annual' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'
+              }`}
             >
-              <span>Annual</span>
-              <span className="text-[10px] text-emerald-400 font-mono font-semibold">20% off</span>
+              <span>Annual Billing</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-bold uppercase">Save 20%</span>
             </button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="p-7 rounded-xl bg-[#111317] border border-zinc-800 flex flex-col justify-between">
+        {/* Pricing Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto mb-10">
+          {/* Developer Free */}
+          <div className="rounded-3xl p-8 flex flex-col justify-between transition duration-300 bg-[#0e121a] border border-white/5 shadow-xl">
             <div>
-              <div className="text-xs font-semibold text-zinc-400 mb-1">Developer Free</div>
-              <div className="text-3xl font-bold text-white mb-3">$0</div>
-              <p className="text-xs text-zinc-400 mb-6 font-light">For prototyping personal ideas.</p>
-              <ul className="space-y-2.5 text-xs text-zinc-300 mb-8 font-light">
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> 5 free generations</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> In-memory live sandbox</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> 1-Click ZIP export</li>
-              </ul>
+              <div className="text-sm font-bold text-slate-300 mb-1">Developer Free</div>
+              <div className="text-4xl font-black text-white mb-1">
+                $0 <span className="text-xs font-normal text-slate-400">/forever</span>
+              </div>
+              <p className="text-xs text-slate-400 mb-8 leading-relaxed font-light">For prototyping personal ideas.</p>
+
+              <div className="border-t border-white/5 pt-6 mb-8">
+                <div className="text-xs uppercase font-bold text-slate-500 tracking-wider mb-4">Included Features:</div>
+                <ul className="space-y-3 text-xs text-slate-300">
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>5 free generations</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>In-memory live sandbox</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>1-Click ZIP export</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>Unlimited Free OpenRouter Models</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>Community Discord support</span>
+                  </li>
+                </ul>
+              </div>
             </div>
 
             {(!isLoaded || !isSignedIn) ? (
               <SignUpButton mode="modal">
-                <button className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition cursor-pointer">
+                <button className="w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white">
                   Get Started Free
                 </button>
               </SignUpButton>
             ) : (
               <button
                 onClick={() => navigateTo('studio')}
-                className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition cursor-pointer"
+                className="w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white"
               >
                 Get Started Free
               </button>
             )}
           </div>
 
-          <div className="p-7 rounded-xl bg-[#13161c] border border-zinc-700 flex flex-col justify-between relative shadow-lg">
+          {/* Pro Founder */}
+          <div className="rounded-3xl p-8 flex flex-col justify-between transition duration-300 bg-gradient-to-b from-indigo-950/50 via-[#0e121a] to-[#0e121a] border-2 border-indigo-500 shadow-2xl shadow-indigo-950/60 relative">
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-indigo-600 text-white text-[10px] font-extrabold uppercase tracking-widest">
+              Recommended
+            </div>
+
             <div>
-              <div className="text-xs font-semibold text-white mb-1">Pro Founder</div>
-              <div className="text-3xl font-bold text-white mb-3">
-                {billingCycle === 'annual' ? '$16' : '$20'} <span className="text-xs font-normal text-zinc-400">/mo</span>
+              <div className="text-sm font-bold text-slate-300 mb-1">Pro Founder</div>
+              <div className="text-4xl font-black text-white mb-1">
+                {billingCycle === 'annual' ? '$16' : '$20'} <span className="text-xs font-normal text-slate-400">/per month</span>
               </div>
-              <p className="text-xs text-zinc-400 mb-6 font-light">For indie makers shipping commercial products.</p>
-              <ul className="space-y-2.5 text-xs text-zinc-200 mb-8 font-light">
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white" /> Unlimited generations</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white" /> Priority synthesis speed</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white" /> Custom domain publishing</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-white" /> Multi-turn architectural memory</li>
-              </ul>
+              <p className="text-xs text-slate-400 mb-8 leading-relaxed font-light">For indie makers shipping commercial products.</p>
+
+              <div className="border-t border-white/5 pt-6 mb-8">
+                <div className="text-xs uppercase font-bold text-slate-500 tracking-wider mb-4">Included Features:</div>
+                <ul className="space-y-3 text-xs text-slate-300">
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
+                    <span>Unlimited generations</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
+                    <span>Priority synthesis speed</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
+                    <span>Custom domain publishing</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
+                    <span>Multi-turn architectural memory</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
+                    <span>Unlimited persistent project saves</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
+                    <span>Priority engineering support</span>
+                  </li>
+                </ul>
+              </div>
             </div>
 
             <button
               onClick={() => navigateTo('checkout', { plan: 'pro', cycle: billingCycle })}
-              className="w-full py-2.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-semibold transition shadow-sm cursor-pointer"
+              className="w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer bg-white hover:bg-zinc-200 text-black shadow-lg shadow-white/10 font-semibold"
             >
               Start Pro Plan
             </button>
           </div>
 
-          <div className="p-7 rounded-xl bg-[#111317] border border-zinc-800 flex flex-col justify-between">
+          {/* Team Workspace */}
+          <div className="rounded-3xl p-8 flex flex-col justify-between transition duration-300 bg-[#0e121a] border border-white/5 shadow-xl">
             <div>
-              <div className="text-xs font-semibold text-zinc-400 mb-1">Team Workspace</div>
-              <div className="text-3xl font-bold text-white mb-3">
-                {billingCycle === 'annual' ? '$40' : '$49'} <span className="text-xs font-normal text-zinc-400">/mo</span>
+              <div className="text-sm font-bold text-slate-300 mb-1">Team Workspace</div>
+              <div className="text-4xl font-black text-white mb-1">
+                {billingCycle === 'annual' ? '$40' : '$49'} <span className="text-xs font-normal text-slate-400">/per month</span>
               </div>
-              <p className="text-xs text-zinc-400 mb-6 font-light">For agencies and digital teams.</p>
-              <ul className="space-y-2.5 text-xs text-zinc-300 mb-8 font-light">
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> 5 team member seats</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> Shared workspace sync</li>
-                <li className="flex items-center gap-2"><Check className="w-3.5 h-3.5 text-zinc-400" /> White-label export options</li>
-              </ul>
+              <p className="text-xs text-slate-400 mb-8 leading-relaxed font-light">For agencies and digital teams.</p>
+
+              <div className="border-t border-white/5 pt-6 mb-8">
+                <div className="text-xs uppercase font-bold text-slate-500 tracking-wider mb-4">Included Features:</div>
+                <ul className="space-y-3 text-xs text-slate-300">
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>5 team member seats</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>Shared workspace sync</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>White-label export options</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>Shared custom API keys pool</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>Dedicated account manager & SLA</span>
+                  </li>
+                </ul>
+              </div>
             </div>
 
             <a
               href="mailto:sales@aethercraft.io?subject=Inquiry%20about%20Team%20Workspace%20Plan"
-              className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition cursor-pointer text-center block"
+              className="w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white text-center block"
             >
               Contact Team Sales
             </a>

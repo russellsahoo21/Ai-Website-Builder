@@ -2,6 +2,8 @@ import { useRef, useCallback } from 'react';
 import { streamGenerateWebsite } from '../services/aiService.js';
 import { parseGeneratedFiles } from '../services/fileParser.js';
 import { getFriendlyMessage, isRecoverable, buildFixPrompt } from '../sandbox/errorReporter.js';
+import { ensureStandardReactStructure } from '../utils/projectStructure.js';
+import { enhanceUserPrompt } from '../utils/promptEnhancer.js';
 
 const MAX_AUTO_FIX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 8000;
@@ -50,8 +52,13 @@ export function useGeneration({
   const mergeFiles = useCallback((parsedResult, prevFiles) => {
     const { files: newFiles, needsReactConversion } = parsedResult;
     if (needsReactConversion) return { merged: prevFiles, needsConversion: true };
-    if (Object.keys(newFiles).length === 0) return { merged: prevFiles, needsConversion: false };
-    return { merged: { ...prevFiles, ...newFiles }, needsConversion: false };
+    if (!newFiles || Object.keys(newFiles).length === 0) return { merged: prevFiles, needsConversion: false };
+    const merged = { ...prevFiles, ...newFiles };
+    // Preserve src/App.jsx if previously present and not overwritten
+    if (prevFiles['src/App.jsx'] && !newFiles['src/App.jsx']) {
+      merged['src/App.jsx'] = prevFiles['src/App.jsx'];
+    }
+    return { merged, needsConversion: false };
   }, []);
 
   /**
@@ -106,8 +113,11 @@ export function useGeneration({
           if (Object.keys(merged).length > 0) setFiles(merged);
         },
         onComplete: (fullText, finalResult) => {
-          const { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
-          if (!needsConversion && Object.keys(merged).length > 0) setFiles(merged);
+          let { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
+          if (!needsConversion && Object.keys(merged).length > 0) {
+            merged = ensureStandardReactStructure(merged);
+            setFiles(merged);
+          }
 
           // Replace the status message with success (silent — no visible change to user)
           setMessages(prev => prev.filter(m => m._id !== statusMsgId));
@@ -138,7 +148,7 @@ export function useGeneration({
   /**
    * Main user-triggered generation.
    */
-  const handleSendMessage = useCallback(async (userPrompt) => {
+  const handleSendMessage = useCallback(async (userPrompt, enginePrompt = null) => {
     if (!apiKey) return false; // caller should open settings
 
     autoFixCountRef.current = 0;
@@ -146,9 +156,17 @@ export function useGeneration({
     abortControllerRef.current = new AbortController();
     isGeneratingRef.current = true;
 
+    // Display clean user prompt in the chat bubble
     const newMessages = [...messagesRef.current, { role: 'user', content: userPrompt }];
     setMessages(newMessages);
     setIsGenerating(true);
+
+    // Enhance prompt for the AI model if needed
+    const promptToSend = enginePrompt || enhanceUserPrompt(userPrompt);
+    const messagesForEngine = [
+      ...messagesRef.current,
+      { role: 'user', content: promptToSend }
+    ];
 
     try {
       let conversionNeeded = false;
@@ -156,7 +174,7 @@ export function useGeneration({
       await streamGenerateWebsite({
         apiKey,
         model: selectedModel,
-        messages: newMessages,
+        messages: messagesForEngine,
         currentFiles: filesRef.current,
         signal: abortControllerRef.current.signal,
         onFileParsed: (parsedResult) => {
@@ -165,8 +183,20 @@ export function useGeneration({
           if (Object.keys(merged).length > 0) setFiles(merged);
         },
         onComplete: (fullText, finalResult) => {
-          const { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
-          if (!needsConversion && Object.keys(merged).length > 0) setFiles(merged);
+          let { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
+
+          const hasAppJsx = Boolean(merged['src/App.jsx'] || merged['App.jsx']);
+          if (!needsConversion && Object.keys(merged).length > 0) {
+            merged = ensureStandardReactStructure(merged);
+            setFiles(merged);
+
+            // If src/App.jsx was completely omitted by model, automatically repair in background
+            if (!hasAppJsx) {
+              setTimeout(() => {
+                executeAutoFix('src/App.jsx was omitted during generation. Please synthesize the complete src/App.jsx component.', false);
+              }, 400);
+            }
+          }
 
           // Build clean reply text — never leak raw code, tool-call tokens, or filenames
           let replyText = fullText;

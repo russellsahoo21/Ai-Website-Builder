@@ -236,7 +236,7 @@ export default function App() {
   };
 
   // — Studio message sender —
-  const onSendMessage = useCallback(async (prompt) => {
+  const onSendMessage = useCallback(async (prompt, enginePrompt = null) => {
     if (!apiKey) { setIsSettingsOpen(true); return; }
 
     // If current project has a generic name and empty prompt, update its title with the user prompt
@@ -247,7 +247,7 @@ export default function App() {
       setProjects(getAllProjects());
     }
 
-    await handleSendMessage(prompt);
+    await handleSendMessage(prompt, enginePrompt);
   }, [apiKey, handleSendMessage, projects, activeProjectId]);
 
   const handleLoadTemplate = (template) => {
@@ -297,7 +297,7 @@ export default function App() {
     window.open(URL.createObjectURL(blob), '_blank');
   };
 
-  const handleLaunchWithPrompt = (promptText) => {
+  const handleLaunchWithPrompt = (promptText, enginePrompt = null) => {
     if (!isSignedIn) { clerk.openSignIn(); return; }
     const newProj = createNewProject({
       name: deriveProjectName(promptText),
@@ -311,7 +311,7 @@ export default function App() {
     setFiles({});
     setMessages([]);
     navigateTo('studio');
-    setTimeout(() => onSendMessage(promptText), 150);
+    setTimeout(() => onSendMessage(promptText, enginePrompt), 150);
   };
 
   const activeProject = projects.find(p => p.id === activeProjectId);

@@ -1,4 +1,4 @@
-﻿import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import SatisfyingLoader from './SatisfyingLoader';
 import SandboxIframe from '../sandbox/SandboxIframe';
 import { buildPreviewDoc } from '../utils/previewBuilder';
@@ -35,7 +35,7 @@ export default function PreviewPanel({ files, viewport, keyTrigger, isGenerating
           </p>
         </div>
       ) : (
-        <div className={`transition-all duration-300 relative overflow-hidden bg-white ${getViewportClass()}`}>
+        <div className={`transition-all duration-300 relative overflow-hidden bg-[#090a0f] ${getViewportClass()}`}>
           <SandboxIframe
             files={files}
             keyTrigger={keyTrigger}

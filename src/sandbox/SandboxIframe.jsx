@@ -1,4 +1,4 @@
-﻿import React, { useRef, useEffect, useState, useCallback } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { buildPreviewDoc } from '../utils/previewBuilder.js';
 
 /**
@@ -30,7 +30,7 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
       ref={iframeRef}
       title="Sandbox Preview"
       sandbox="allow-scripts allow-modals allow-same-origin allow-forms"
-      className={`w-full h-full border-0 bg-white ${className || ''}`}
+      className={`w-full h-full border-0 bg-[#090a0f] ${className || ''}`}
     />
   );
 }
