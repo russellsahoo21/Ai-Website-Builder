@@ -7,25 +7,31 @@
  * - Automatic 429 rate-limit retry (once, after 10s)
  */
 
-export const DEFAULT_MODEL = 'openrouter/free';
+export const DEFAULT_MODEL = 'google/gemini-3.6-flash';
 
 export const AVAILABLE_MODELS = [
   {
+    id: 'google/gemini-3.6-flash',
+    name: 'Google Gemini 3.6 Flash (Recommended)',
+    badge: '1s Latency • Superior UI Taste • Free',
+    isFree: true,
+  },
+  {
+    id: 'deepseek/deepseek-chat',
+    name: 'DeepSeek V3 (High Value)',
+    badge: '$0.001/site • Frontier Code',
+    isFree: false,
+  },
+  {
     id: 'openrouter/free',
-    name: 'Auto Free Router (Recommended)',
-    badge: 'Instant Queue • Auto Selected',
+    name: 'OpenRouter Free Auto-Router',
+    badge: 'Instant Queue • Multi-Provider',
     isFree: true,
   },
   {
-    id: 'google/gemma-4-31b-it:free',
-    name: 'Google Gemma 4 31B (Free)',
-    badge: '1.4s Latency • High Speed',
-    isFree: true,
-  },
-  {
-    id: 'nvidia/nemotron-3.5-lightning:free',
-    name: 'NVIDIA Nemotron 3.5 (Free)',
-    badge: 'Balanced Reasoning',
+    id: 'nvidia/nemotron-3-ultra-550b-a55b:free',
+    name: 'NVIDIA Nemotron 3 Ultra (550B Free)',
+    badge: '550B Large Model',
     isFree: true,
   },
   {
@@ -37,7 +43,7 @@ export const AVAILABLE_MODELS = [
   {
     id: 'anthropic/claude-3.5-sonnet',
     name: 'Claude 3.5 Sonnet (Paid)',
-    badge: 'Frontier Quality',
+    badge: 'Industry Benchmark • v0 Standard',
     isFree: false,
   },
   {
@@ -47,6 +53,7 @@ export const AVAILABLE_MODELS = [
     isFree: false,
   },
 ];
+
 
 const SYSTEM_PROMPT = `You are AetherCraft Engine, an elite React 18 engineering system.
 Your mission: generate production-grade, visually stunning, fully interactive React 18 SPAs.
@@ -151,7 +158,30 @@ function buildFormattedMessages(messages, currentFiles) {
 }
 
 async function fetchStream(apiKey, model, formattedMessages, signal) {
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const isGemini = model.includes('gemini');
+
+  if (isGemini) {
+    const geminiKey = (apiKey && (apiKey.startsWith('AQ.') || apiKey.startsWith('AIzaSy')))
+      ? apiKey
+      : (import.meta.env.VITE_GEMINI_API_KEY || '');
+
+    return fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+      method: 'POST',
+      signal,
+      headers: {
+        Authorization: `Bearer ${geminiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gemini-3.6-flash',
+        messages: formattedMessages,
+        stream: true,
+        temperature: 0.7,
+      }),
+    });
+  }
+
+  return fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     signal,
     headers: {
@@ -167,7 +197,6 @@ async function fetchStream(apiKey, model, formattedMessages, signal) {
       temperature: 0.7,
     }),
   });
-  return res;
 }
 
 // --- Main export ---
@@ -282,6 +311,31 @@ export async function streamGenerateWebsite({
 }
 
 export async function testOpenRouterConnection(apiKey, model = DEFAULT_MODEL) {
+  if (model.includes('gemini')) {
+    const geminiKey = (apiKey && (apiKey.startsWith('AQ.') || apiKey.startsWith('AIzaSy')))
+      ? apiKey
+      : (import.meta.env.VITE_GEMINI_API_KEY || '');
+
+    const res = await fetch('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${geminiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gemini-3.6-flash',
+        messages: [{ role: 'user', content: "Ping. Respond with 'Connection Successful'." }],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Google Gemini API error: HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || 'Connected';
+  }
+
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: {

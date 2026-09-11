@@ -58,32 +58,92 @@ export function enhanceUserPrompt(rawPrompt, options = {}) {
     return trimmed;
   }
 
-  return `You are building a production-grade React 18 single-page application with Tailwind CSS and Lucide icons based on this user specification:
-"${trimmed}"
+  const norm = normalizeText(trimmed);
 
-ARCHITECTURAL SPECIFICATION & MANDATORY REQUIREMENTS:
-1. OUTPUT ORDER (CRITICAL):
-   - You MUST output <<<FILE:src/App.jsx>>> as the VERY FIRST file.
-   - Do NOT emit styles or other files before src/App.jsx.
-   - Optional sub-components go inside <<<FILE:src/components/...>>>.
-   - Custom styling goes inside <<<FILE:src/index.css>>>.
+  // 1. FOOD DELIVERY / RESTAURANT APPS (Zomato, Swiggy, DoorDash, UberEats)
+  if (
+    norm.includes('zomato') || norm.includes('swiggy') || norm.includes('ubereats') ||
+    norm.includes('doordash') || norm.includes('food delivery') || norm.includes('restaurant') ||
+    norm.includes('cafe') || norm.includes('pizza') || norm.includes('burger') || norm.includes('dining')
+  ) {
+    return `You are building a world-class Food Delivery & Dining Platform (Zomato-style) in React 18 with Tailwind CSS and Lucide icons based on: "${trimmed}"
 
-2. COMPONENT ARCHITECTURE & STATE:
-   - Primary component must be default-exported in src/App.jsx.
-   - Implement complete, working state management using React useState, useEffect, and localStorage persistence for all user actions (create, edit, delete, filter, toggle).
-   - Initialize all state with 4 to 8 realistic, rich domain mock items (never empty lists or single items).
+MANDATORY RULES:
+1. OUTPUT ORDER: Output <<<FILE:src/App.jsx>>> as the VERY FIRST file.
+2. DO NOT build a dark database CRUD dashboard. DO NOT add generic tip calculators or "+0 vs previous" metric cards.
+3. This must be an appetizing, consumer-facing application with genuine food photography and interactive cart ordering.
 
-3. INTERACTIVE FEATURES:
-   - Search bar and category filter tabs with real-time filtering.
-   - Interactive modals / slide-overs for creating and editing records.
-   - Dynamic interactive visual widgets (e.g., metric stats cards with percentage change badges, interactive charts or progress bars, calculators).
-   - Empty states and confirmation feedback toasts.
+HIGH-RES UNSPLASH FOOD IMAGE URLS (USE THESE EXACT LINKS):
+- Wood-fired Pizza: https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&auto=format&fit=crop
+- Double Wagyu Smash Burger: https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&auto=format&fit=crop
+- Hyderabadi Royal Dum Biryani: https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=600&auto=format&fit=crop
+- Artisan Salmon Sushi Platter: https://images.unsplash.com/photo-1579871494447-9811cf80d66c?w=600&auto=format&fit=crop
+- Creamy Truffle Pasta: https://images.unsplash.com/photo-1551183053-bf91a1d81141?w=600&auto=format&fit=crop
+- Belgian Chocolate Waffles: https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=600&auto=format&fit=crop
+- Specialty Cold Brew & Croissant: https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?w=600&auto=format&fit=crop
+- Sichuan Dragon Noodles: https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=600&auto=format&fit=crop
 
-4. UI & DESIGN SYSTEM:
-   - Modern obsidian dark aesthetic (#090a0f background, zinc-900 cards, zinc-800 borders, zinc-100 text).
-   - Crisp hover micro-interactions, active state indicators, and responsive flex/grid layout across mobile and desktop.
-   - Use Lucide icons throughout (import from 'lucide-react').
+KEY FEATURES & USER FLOW:
+1. Header & Location Selector:
+   - Brand logo with Zomato Crimson Red accent (#E23744) or warm dining theme.
+   - Location pill: "Manhattan, New York" or user-selectable location dropdown.
+   - Global search bar: "Search for restaurant, cuisine, or a dish...".
+   - Cart icon with dynamic badge showing item count. Clicking opens the Slide-out Cart Drawer.
+2. Interactive Cuisine & Category Pills:
+   - Pills: [All, Pizza, Burgers, Biryani, Sushi, Pasta, Desserts, Cafe] with live filter state.
+3. Promotional Offer Banner:
+   - "50% OFF up to $10 on First 3 Orders | Use Code: CRAFT50" with vibrant gradient card.
+4. Rich Restaurant / Food Grid (6+ unique cards):
+   - High-res food cover photo with hover zoom.
+   - Discount tag overlay: "50% OFF UP TO $10".
+   - Delivery time & distance badge: "25-30 min • 2.4 km".
+   - Star rating badge in emerald green: "4.4 (1.2k+)".
+   - Price indication: "$$ • $25 for two".
+   - Featured top dish preview with quick "+ Add to Cart" button.
+5. Interactive Slide-out Cart Drawer:
+   - Slides from the right when cart or "Add" is clicked.
+   - Lists items with thumbnail, quantity (+ / -) controls, and price calculation.
+   - Order summary: Subtotal, Delivery Fee ($2.99), Taxes.
+   - Promo code input with instant discount simulation.
+   - "Proceed to Checkout" button with interactive order success confirmation modal.
+6. Clean, high-contrast design: crisp white/zinc-50 cards or dark obsidian theme with crisp red (#E23744) accents, smooth rounded-2xl corners, and glassmorphic headers.`;
+  }
 
-5. ZERO PLACEHOLDERS:
-   - Write 100% complete, executable code without any TODO comments or unfinished functions.`;
+  // 2. E-COMMERCE / STORE APPS
+  if (
+    norm.includes('ecommerce') || norm.includes('store') || norm.includes('shop') ||
+    norm.includes('sneaker') || norm.includes('clothing') || norm.includes('fashion')
+  ) {
+    return `You are building a production-grade Modern E-Commerce Store SPA in React 18 with Tailwind CSS and Lucide icons based on: "${trimmed}"
+
+MANDATORY RULES:
+1. OUTPUT ORDER: Output <<<FILE:src/App.jsx>>> as the VERY FIRST file.
+2. Injects real product imagery from Unsplash, working cart drawer, size/color selectors, price filters, and wishlist toggling with localStorage persistence.
+
+UNSPLASH PRODUCT IMAGERY:
+- Minimalist Sneaker: https://images.unsplash.com/photo-1552346154-21d32810aba3?w=600&auto=format&fit=crop
+- Denim Jacket: https://images.unsplash.com/photo-1551028719-00167b16eac5?w=600&auto=format&fit=crop
+- Smart Watch: https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=600&auto=format&fit=crop
+- Leather Backpack: https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=600&auto=format&fit=crop
+- Noise-Cancelling Headphones: https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=600&auto=format&fit=crop
+- Sunglasses: https://images.unsplash.com/photo-1572635196237-14b3f281503f?w=600&auto=format&fit=crop
+
+KEY FEATURES:
+- Sticky navigation with Search, Wishlist badge, and Cart drawer trigger.
+- Hero editorial showcase with "Shop New Arrivals" CTA.
+- Category filters [All, Footwear, Apparel, Accessories, Electronics] and Sort by (Price, Rating).
+- Product Cards: high-res photo, brand name, star ratings, price, size selector, and Add to Cart.
+- Slide-out Cart Drawer with item quantity modification, promo codes, and animated checkout modal.`;
+  }
+
+  // 3. GENERAL HIGH-GRADE WEB APPLICATION
+  return `You are building a production-grade, visually stunning React 18 single-page application with Tailwind CSS and Lucide icons based on: "${trimmed}"
+
+MANDATORY ARCHITECTURAL RULES:
+1. OUTPUT ORDER: Output <<<FILE:src/App.jsx>>> as the VERY FIRST file.
+2. Full interactivity using React useState, useEffect, and localStorage persistence for state.
+3. Initialize all state with 5 to 8 realistic, rich domain mock records (never empty lists or single items).
+4. Responsive design across mobile, tablet, and desktop viewports.
+5. High-contrast typography, subtle micro-interactions, clean glassmorphism accents, and Lucide icons throughout.
+6. Write 100% complete, executable code without any TODO comments or unfinished functions.`;
 }
