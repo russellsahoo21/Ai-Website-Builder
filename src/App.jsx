@@ -157,7 +157,7 @@ export default function App() {
   const onRefresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
 
   // — Generation hook —
-  const { handleSendMessage, handleCancelGeneration, executeAutoFix, telemetry } = useGeneration({
+  const { handleSendMessage, handleCancelGeneration, executeAutoFix, autoFixCountRef, telemetry } = useGeneration({
     apiKey,
     selectedModel,
     filesRef,
@@ -278,6 +278,8 @@ export default function App() {
   }, [apiKey, handleSendMessage, projects, activeProjectId]);
 
   const handleLoadTemplate = (template) => {
+    handleCancelGeneration();
+    if (autoFixCountRef) autoFixCountRef.current = 0;
     const newProj = createNewProject({
       name: template.name,
       prompt: template.tagline || template.description,
@@ -287,7 +289,7 @@ export default function App() {
     setProjects(getAllProjects());
     setActiveProjectIdState(newProj.id);
     setActiveProjectId(newProj.id);
-    setFiles(template.files || {});
+    setFiles(newProj.files || template.files || {});
     setMessages([{ role: 'ai', content: `Template loaded: "${template.name}". Inspect code or submit instructions to refine.` }]);
     if (!isSignedIn) { clerk.openSignIn(); return; }
     navigateTo('studio');

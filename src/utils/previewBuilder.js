@@ -190,13 +190,17 @@ export function buildPreviewDoc(files) {
       }
     }
   </script>
-  <!-- React 18 & ReactDOM UMD (Fast jsDelivr CDN) -->
+  <!-- React 18 & ReactDOM UMD (Fast jsDelivr CDN with unpkg fallback) -->
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
+  <script>window.React || document.write('<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin><\\/script>')</script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script>window.ReactDOM || document.write('<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin><\\/script>')</script>
   <!-- Lucide Icons -->
   <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
+  <script>window.lucide || document.write('<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"><\\/script>')</script>
   <!-- Babel Standalone -->
   <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.0/babel.min.js"></script>
+  <script>window.Babel || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.0/babel.min.js"><\\/script>')</script>
   <style>
     body { background-color: #090a0f; color: #f4f4f5; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; margin: 0; padding: 0; }
     ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -412,7 +416,10 @@ export function buildPreviewDoc(files) {
         if (!sourceEl) return;
         var rawCode = sourceEl.textContent;
         var compiled = Babel.transform(rawCode, {
-          presets: ['react', 'typescript'],
+          presets: [
+            ['react', { runtime: 'classic' }],
+            'typescript'
+          ],
           filename: 'App.tsx'
         }).code;
         var runner = new Function(compiled);

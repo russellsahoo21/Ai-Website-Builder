@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@babel/standalone": "^8.0.5",
     "@clerk/react": "^6.15.2",
     "@clerk/themes": "^2.4.57",
     "@supabase/supabase-js": "^2.116.0",
