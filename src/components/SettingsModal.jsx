@@ -26,7 +26,8 @@ export default function SettingsModal({
   const handleTestKey = async () => {
     const isGemini = selectedModel.includes('gemini');
     const isNvidia = selectedModel.includes('nvidia') || selectedModel.includes('deepseek-v4');
-    const hasDefaultKey = isGemini || isNvidia;
+    const isGroq = selectedModel.includes('qwen') || selectedModel.includes('groq') || selectedModel.includes('gpt-oss');
+    const hasDefaultKey = isGemini || isNvidia || isGroq;
 
     if (!tempKey && !hasDefaultKey) {
       setTestResult({ success: false, msg: 'Please enter an API key first' });
@@ -81,11 +82,11 @@ export default function SettingsModal({
             type="password"
             value={tempKey}
             onChange={(e) => setTempKey(e.target.value)}
-            placeholder="sk-or-... or nvapi-... or AQ...."
+            placeholder="gsk_... or sk-or-... or nvapi-... or AQ...."
             className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white font-mono text-xs focus:border-indigo-500 focus:outline-none transition"
           />
           <p className="text-[11px] text-slate-500 mt-1.5">
-            Gemini & NVIDIA NIM defaults are pre-configured. Enter a key to override or for OpenRouter models.
+            Groq LPU, Gemini & NVIDIA NIM defaults are pre-configured. Enter a key to override or for OpenRouter models.
           </p>
         </div>
 

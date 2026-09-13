@@ -264,7 +264,9 @@ export default function App() {
 
   // — Studio message sender —
   const onSendMessage = useCallback(async (prompt, enginePrompt = null) => {
-    if (!apiKey) { setIsSettingsOpen(true); return; }
+    const isProviderWithDefault = selectedModel.includes('gemini') || selectedModel.includes('nvidia') || selectedModel.includes('qwen') || selectedModel.includes('groq') || selectedModel.includes('gpt-oss');
+    const hasKey = Boolean(apiKey || isProviderWithDefault || import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_GROQ_API_KEY);
+    if (!hasKey) { setIsSettingsOpen(true); return; }
 
     // If current project has a generic name and empty prompt, update its title with the user prompt
     const currentProj = projects.find(p => p.id === activeProjectId);

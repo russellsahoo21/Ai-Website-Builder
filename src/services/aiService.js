@@ -11,9 +11,21 @@ export const DEFAULT_MODEL = 'google/gemini-3.6-flash';
 
 export const AVAILABLE_MODELS = [
   {
+    id: 'qwen/qwen3.8-27b',
+    name: 'Qwen 3.8 27B (Groq Ultra-Fast)',
+    badge: '⚡ ~300 tok/s • Groq LPU',
+    isFree: true,
+  },
+  {
     id: 'google/gemini-3.6-flash',
     name: 'Google Gemini 3.6 Flash (Recommended)',
     badge: '1s Latency • Superior UI Taste • Free',
+    isFree: true,
+  },
+  {
+    id: 'openai/gpt-oss-120b',
+    name: 'GPT-OSS 120B (Groq Ultra-Fast)',
+    badge: '⚡ 120B Frontier • Groq LPU',
     isFree: true,
   },
   {
@@ -173,8 +185,30 @@ function buildFormattedMessages(messages, currentFiles) {
 }
 
 async function fetchStream(apiKey, model, formattedMessages, signal) {
+  const isGroq = model.startsWith('qwen/') || model.startsWith('groq/') || model.includes('gpt-oss') || (apiKey && apiKey.startsWith('gsk_'));
   const isGemini = model.includes('gemini');
   const isNvidia = model.includes('nvidia') || model.includes('deepseek-v4');
+
+  if (isGroq) {
+    const groqKey = (apiKey && apiKey.startsWith('gsk_'))
+      ? apiKey
+      : (import.meta.env.VITE_GROQ_API_KEY || '');
+
+    return fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      signal,
+      headers: {
+        Authorization: `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model.includes('/') ? model : 'qwen/qwen3.8-27b',
+        messages: formattedMessages,
+        stream: true,
+        temperature: 0.7,
+      }),
+    });
+  }
 
   if (isGemini) {
     const geminiKey = (apiKey && (apiKey.startsWith('AQ.') || apiKey.startsWith('AIzaSy')))
@@ -373,6 +407,31 @@ export async function testOpenRouterConnection(apiKey, model = DEFAULT_MODEL) {
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.error?.message || `Google Gemini API error: HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || 'Connected';
+  }
+
+  if (model.includes('qwen') || model.includes('groq') || model.includes('gpt-oss') || (apiKey && apiKey.startsWith('gsk_'))) {
+    const groqKey = (apiKey && apiKey.startsWith('gsk_'))
+      ? apiKey
+      : (import.meta.env.VITE_GROQ_API_KEY || '');
+
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: model.includes('/') ? model : 'qwen/qwen3.8-27b',
+        messages: [{ role: 'user', content: "Ping. Respond with 'Connection Successful'." }],
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error?.message || `Groq API error: HTTP ${res.status}`);
     }
     const data = await res.json();
     return data.choices?.[0]?.message?.content || 'Connected';
