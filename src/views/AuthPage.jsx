@@ -1,10 +1,35 @@
 "use client";
-import React from 'react';
-import { SignIn, SignUp } from '@clerk/react';
-import { ArrowLeft, Sparkles, Terminal, ShieldCheck, Zap, Layers, Rocket } from 'lucide-react';
+import React, { useEffect } from 'react';
+import { SignIn, SignUp, useAuth } from '@clerk/nextjs';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowLeft, Sparkles, Terminal, ShieldCheck, Zap, Layers, Rocket, RefreshCw } from 'lucide-react';
 
 export default function AuthPage({ mode = 'login', navigateTo }) {
   const isLogin = mode === 'login';
+  const { isSignedIn, isLoaded } = useAuth();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      const redirectUrl = searchParams.get('redirect_url');
+      if (redirectUrl) {
+        try {
+          const parsed = new URL(redirectUrl, window.location.origin);
+          if (parsed.origin === window.location.origin) {
+            router.replace(parsed.pathname + parsed.search);
+            return;
+          }
+        } catch (e) {
+          if (redirectUrl.startsWith('/')) {
+            router.replace(redirectUrl);
+            return;
+          }
+        }
+      }
+      router.replace('/dashboard');
+    }
+  }, [isLoaded, isSignedIn, router, searchParams]);
 
   return (
     <div className="h-[calc(100vh-3.5rem)] max-h-[calc(100vh-3.5rem)] flex-1 flex flex-col justify-between select-none relative overflow-hidden font-sans">
@@ -86,13 +111,21 @@ export default function AuthPage({ mode = 'login', navigateTo }) {
 
                 {/* Embedded Clerk Form */}
                 <div className="w-full">
-                {isLogin ? (
+                {isLoaded && isSignedIn ? (
+                  <div className="flex flex-col items-center justify-center py-10 space-y-3 text-center">
+                    <RefreshCw className="w-6 h-6 text-indigo-400 animate-spin" />
+                    <p className="text-sm font-semibold text-white">Authentication Successful</p>
+                    <p className="text-xs text-zinc-400">Redirecting to your dashboard...</p>
+                  </div>
+                ) : isLogin ? (
                   <SignIn 
                     routing="path"
                     path="/login"
                     signUpUrl="/signup"
                     fallbackRedirectUrl="/dashboard"
                     forceRedirectUrl="/dashboard"
+                    afterSignInUrl="/dashboard"
+                    afterSignUpUrl="/dashboard"
                     appearance={{
                       elements: {
                         rootBox: 'w-full',
@@ -120,6 +153,8 @@ export default function AuthPage({ mode = 'login', navigateTo }) {
                     signInUrl="/login"
                     fallbackRedirectUrl="/dashboard"
                     forceRedirectUrl="/dashboard"
+                    afterSignInUrl="/dashboard"
+                    afterSignUpUrl="/dashboard"
                     appearance={{
                       elements: {
                         rootBox: 'w-full',

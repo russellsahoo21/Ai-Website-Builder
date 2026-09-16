@@ -523,7 +523,7 @@ export default function App({ initialRoute }) {
   }
 
   // ── Dedicated Dashboard View (Full-height with permanent Left Sidebar) ────
-  if (currentRoute === 'dashboard' && isSignedIn) {
+  if (currentRoute === 'dashboard') {
     return (
       <div className="w-screen h-screen flex bg-[#07090e] text-zinc-100 overflow-hidden font-sans">
         <DashboardPage
