@@ -128,25 +128,21 @@ export function compressCode(code = '', filename = 'App.jsx') {
  * @param {number} maxFullFiles - maximum files to send with complete code (default 3)
  * @returns {{ selectedFiles: Object, manifestFiles: Array<string> }}
  */
-export function selectRelevantFiles(currentFiles = {}, userPrompt = '', maxFullFiles = 3) {
+export function selectRelevantFiles(currentFiles = {}, userPrompt = '', maxFullFiles = 2) {
   const filenames = Object.keys(currentFiles);
-  if (filenames.length <= maxFullFiles) {
+  if (filenames.length === 0) {
+    return { selectedFiles: {}, manifestFiles: [] };
+  }
+  if (filenames.length === 1) {
     return { selectedFiles: currentFiles, manifestFiles: [] };
   }
 
   const selectedFiles = {};
   const manifestFiles = [];
-
-  // 1. Always prioritize root UI component
-  const primaryKey = filenames.find(f => f === 'src/App.jsx' || f === 'App.jsx' || f === 'src/App.js') || filenames[0];
-  if (primaryKey && currentFiles[primaryKey]) {
-    selectedFiles[primaryKey] = currentFiles[primaryKey];
-  }
-
-  // 2. Identify files explicitly referenced in user prompt
   const promptLower = (userPrompt || '').toLowerCase();
+
+  // 1. Identify files explicitly referenced in user prompt
   filenames.forEach(f => {
-    if (f === primaryKey) return;
     const baseName = f.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase();
     if (promptLower.includes(baseName) || promptLower.includes(f.toLowerCase())) {
       if (Object.keys(selectedFiles).length < maxFullFiles) {
@@ -155,25 +151,33 @@ export function selectRelevantFiles(currentFiles = {}, userPrompt = '', maxFullF
     }
   });
 
-  // 3. Graphify Dependency Walk: Follow direct imports in primary component
-  if (primaryKey && currentFiles[primaryKey] && Object.keys(selectedFiles).length < maxFullFiles) {
-    const importMatches = [...currentFiles[primaryKey].matchAll(/from\s+['"]([^'"]+)['"]/g)].map(m => m[1]);
-    for (const imp of importMatches) {
-      if (Object.keys(selectedFiles).length >= maxFullFiles) break;
-      const cleanImp = imp.replace(/^\.\//, '').replace(/^\.\.\//, '');
-      const matched = filenames.find(f => f.includes(cleanImp) && !selectedFiles[f]);
-      if (matched && currentFiles[matched]) {
-        selectedFiles[matched] = currentFiles[matched];
+  // 2. If no files were explicitly matched by prompt, select root UI component
+  if (Object.keys(selectedFiles).length === 0) {
+    const primaryKey = filenames.find(f => f === 'src/App.jsx' || f === 'App.jsx' || f === 'src/App.js') || filenames[0];
+    if (primaryKey && currentFiles[primaryKey]) {
+      selectedFiles[primaryKey] = currentFiles[primaryKey];
+    }
+  }
+
+  // 3. Graphify Dependency Walk: Follow direct imports if room remains
+  const currentKeys = Object.keys(selectedFiles);
+  for (const key of currentKeys) {
+    if (Object.keys(selectedFiles).length >= maxFullFiles) break;
+    const content = selectedFiles[key];
+    if (content) {
+      const importMatches = [...content.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(m => m[1]);
+      for (const imp of importMatches) {
+        if (Object.keys(selectedFiles).length >= maxFullFiles) break;
+        const cleanImp = imp.replace(/^\.\//, '').replace(/^\.\.\//, '');
+        const matched = filenames.find(f => f.includes(cleanImp) && !selectedFiles[f]);
+        if (matched && currentFiles[matched]) {
+          selectedFiles[matched] = currentFiles[matched];
+        }
       }
     }
   }
 
-  // 4. If space permits and src/index.css exists, include it
-  if (currentFiles['src/index.css'] && !selectedFiles['src/index.css'] && Object.keys(selectedFiles).length < maxFullFiles) {
-    selectedFiles['src/index.css'] = currentFiles['src/index.css'];
-  }
-
-  // 5. Build compact manifest for all remaining workspace files
+  // 4. Everything else goes into manifest
   filenames.forEach(f => {
     if (!selectedFiles[f]) {
       manifestFiles.push(f);

@@ -89,31 +89,40 @@ export function resetTokenUsage(amount = 0) {
  * Records tokens used after a synthesis operation.
  * Dispatches a custom event 'tokenUsageUpdated' so UI components refresh instantly.
  * @param {number} tokens - Number of tokens consumed
+ * @param {Object} [metadata] - Optional usage details (isEstimated, rawProviderUsage)
  * @returns {{ used: number, total: number, remaining: number, percent: number }}
  */
-export function recordTokenUsage(tokens = 0) {
+export function recordTokenUsage(tokens = 0, metadata = {}) {
   if (typeof window === 'undefined' || !tokens) return getTokenUsage();
 
   const current = getTokenUsage();
   const updatedUsed = current.used + Math.max(0, tokens);
 
   localStorage.setItem(STORAGE_KEY_USAGE, String(updatedUsed));
-
-  const updatedUsage = {
-    ...current,
-    used: updatedUsed,
-    remaining: Math.max(0, current.total - updatedUsed),
-    percent: Math.min(100, Math.round((updatedUsed / current.total) * 100)),
-  };
-
-  // Notify listeners (Dashboard, Studio, etc.)
-  try {
-    window.dispatchEvent(new CustomEvent('tokenUsageUpdated', { detail: updatedUsage }));
-  } catch (e) {
-    // ignore in non-browser environments
+  if (metadata?.rawProviderUsage) {
+    try {
+      localStorage.setItem('aethercraft_last_raw_usage', JSON.stringify(metadata.rawProviderUsage));
+    } catch (e) {}
   }
 
-  return updatedUsage;
+  const updated = {
+    used: updatedUsed,
+    total: current.total,
+    remaining: Math.max(0, current.total - updatedUsed),
+    percent: Math.min(100, Math.round((updatedUsed / current.total) * 100)),
+    period: current.period,
+    lastTurn: {
+      tokens,
+      isEstimated: Boolean(metadata.isEstimated),
+      rawProviderUsage: metadata.rawProviderUsage || null,
+    },
+  };
+
+  try {
+    window.dispatchEvent(new CustomEvent('tokenUsageUpdated', { detail: updated }));
+  } catch (e) {}
+
+  return updated;
 }
 
 /**

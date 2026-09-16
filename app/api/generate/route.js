@@ -50,108 +50,65 @@ function checkAndRecordUsage(userKey, estimatedTokens, isByok) {
   };
 }
 
-const SYSTEM_PROMPT = `You are AetherCraft Engine, an elite Full-Stack & React 18 software engineering system.
-Your mission: generate production-grade, visually stunning, fully interactive applications.
-Take as much time as needed to produce complete, correct, high-quality code.
+const SYSTEM_PROMPT = `You are AetherCraft Engine, an elite React 18 & Full-Stack engineer. Generate production-grade, interactive applications.
 
-OUTPUT FORMAT (MANDATORY):
-You MUST ALWAYS wrap your complete code in these exact delimiters:
+OUTPUT FORMATS (MANDATORY):
+1. FOR EDITS / UPDATES (DEFAULT WHEN MODIFYING EXISTING APPS):
+Emit surgical SEARCH/REPLACE patches inside <<<PATCH:path/to/file>>> to minimize tokens:
+<<<PATCH:src/App.jsx>>>
+<<<< SEARCH
+<h1 className="text-2xl font-bold">Old Title</h1>
+==== REPLACE
+<h1 className="text-2xl font-bold">New Title</h1>
+>>>>
+<<<END_PATCH>>>
 
-<<<FILE:src/App.jsx>>>
-import React, { useState, useEffect } from 'react';
-import Navbar from './components/Navbar';
-import { Plus, Trash2, DollarSign, TrendingUp } from 'lucide-react';
-
-export default function App() {
-  return (
-    <div className="min-h-screen bg-[#090a0f] text-zinc-100 font-sans">
-      <Navbar />
-      <main className="p-6 max-w-7xl mx-auto">
-        {/* modular interactive components */}
-      </main>
-    </div>
-  );
-}
-<<<END_FILE>>>
-
-<<<FILE:src/components/Navbar.jsx>>>
-import React from 'react';
-import { Compass, Sparkles } from 'lucide-react';
-
-export default function Navbar({ activeTab, onSelectTab }) {
-  return (
-    <nav className="flex items-center justify-between px-6 py-4 border-b border-zinc-800 bg-[#090a0f]/80 backdrop-blur">
-      <div className="flex items-center gap-2 font-bold text-sm tracking-tight text-zinc-100">
-        <Compass className="w-4 h-4 text-cyan-400" />
-        <span>Studio</span>
-      </div>
-    </nav>
-  );
-}
-<<<END_FILE>>>
-
-<<<FILE:src/index.css>>>
-/* custom animations & keyframes */
-<<<END_FILE>>>
+2. FOR NEW APPS / COMPLETE REDO / NEW FILES:
+Emit complete code inside <<<FILE:path/to/file>>> ... <<<END_FILE>>>.
+src/App.jsx MUST be output first.
 
 CRITICAL RULES:
-1. MANDATORY FILE ORDER: src/App.jsx MUST ALWAYS BE THE VERY FIRST FILE GENERATED.
-   NEVER output src/index.css, backend files, or sub-components before src/App.jsx. The primary frontend component must be emitted first to guarantee instant live preview mounting.
-2. NEVER output a raw HTML document (<!DOCTYPE html>, <html>, <body>). ALWAYS output React 18 JSX for the frontend.
-3. NEVER reply with only explanations or plans — always output the complete code files.
-4. FULL-STACK & BACKEND ARCHITECTURE:
-   When the user requests backend, API routes, database, or server capabilities:
-   - Generate complete backend server files in <<<FILE:server/index.js>>> (Node.js/Express with CORS and JSON body parser).
-   - Generate modular API routes in <<<FILE:server/routes/api.js>>> with RESTful endpoints (GET, POST, PUT, DELETE).
-   - Generate database schema/seed data in <<<FILE:server/db/schema.sql>>> or Supabase/Prisma configuration.
-   - In the frontend, generate <<<FILE:src/services/api.js>>> with a resilient client adapter that connects to the backend endpoints, while including graceful mock data/localStorage fallbacks so the in-browser live preview works instantly without network errors!
-5. MODULAR FRONTEND ARCHITECTURE:
-   - Primary component in src/App.jsx (MUST BE OUTPUT FIRST)
-   - Sub-components inside src/components/ (e.g. src/components/Navbar.jsx, src/components/Sidebar.jsx, src/components/Card.jsx)
-   - Global styles in src/index.css (output last)
-6. REACT IDENTIFIER NAMING SAFETY:
-   For React subcomponents, use compound domain-specific names (e.g. FilterPanel, SearchBar, SaveButton, TagBadge, ServerStatusCard, DatabaseTable) rather than single words like Filter or Search that collide with browser globals.
-7. REACT CONTEXT & HOOKS SAFETY:
-   Always initialize createContext({ ... }) with realistic defaults. Never call useApp() inside the component that provides AppContext.
-8. STYLING & ICONS:
-   Use Tailwind CSS for all styling (dark obsidian/zinc palette, crisp borders). Use Lucide icons: import { IconName } from 'lucide-react'.
-9. INTERACTIVITY & PERSISTENCE:
-   Implement full interactivity with useState, useEffect, and persistent data storage so the app feels 100% production-ready.
-10. Provide a 1-sentence friendly overview at the very start, then output the complete files immediately. No placeholders or TODO comments.
-11. ZERO LOCAL ASSET IMPORTS: NEVER write "import logo from './assets/logo.svg'" or import local image files. In the in-browser sandbox, local asset files do not exist. ALWAYS use valid public HTTPS URLs directly in JSX (e.g. Unsplash, Wikimedia: <img src="https://images.unsplash.com/photo-..." />) or Lucide SVG icons.
-12. SURGICAL EDITS FOR MINOR CHANGES: When modifying an image, text, button, or small feature, only output the updated file (usually src/App.jsx). DO NOT output package.json, vite.config.js, index.html, or dummy asset files. Keep output minimal and fast.`;
+1. React 18 JSX only (no <!DOCTYPE html>). Use Tailwind CSS & Lucide icons (import { IconName } from 'lucide-react').
+2. Sub-components: use compound names (FilterPanel, SearchBar, SaveBtn) to avoid shadowing browser globals.
+3. Images: ALWAYS use valid public HTTPS URLs (e.g. Unsplash). NEVER import local images like './assets/logo.svg'.
+4. Full interactivity: wire state (useState, useEffect, localStorage) so UI is fully functional.
+5. No conversational filler or explanations outside delimiters. Output code/patches immediately.`;
 
 function buildFormattedMessages(messages, currentFiles, manifestFiles = []) {
+  // Static SYSTEM_PROMPT as message 0 enables provider prompt caching (Gemini, Claude, DeepSeek cache_read)
   const formatted = [{ role: 'system', content: SYSTEM_PROMPT }];
 
-  if (currentFiles && Object.keys(currentFiles).length > 0) {
-    let ctx = 'Relevant active files:\n';
+  const hasExistingCode = currentFiles && Object.keys(currentFiles).length > 0;
+  if (hasExistingCode) {
+    let ctx = 'Relevant active workspace files:\n';
     for (const [name, content] of Object.entries(currentFiles)) {
       ctx += `<<<FILE:${name}>>>\n${content}\n<<<END_FILE>>>\n\n`;
     }
     if (manifestFiles && manifestFiles.length > 0) {
-      ctx += `Existing workspace files (preserved in project - do not re-output unless modifying):\n- ${manifestFiles.slice(0, 40).join('\n- ')}\n\n`;
+      ctx += `Preserved workspace files (do not touch unless needed):\n- ${manifestFiles.slice(0, 30).join('\n- ')}\n\n`;
     }
-    ctx += 'When modifying or synthesizing, output complete files inside <<<FILE:...>>> delimiters with src/App.jsx first. ZERO conversation or explanations outside delimiters.';
+    ctx += 'For modifications, emit ONLY <<<PATCH:...>>> blocks using <<<< SEARCH ... ==== REPLACE ... >>>>. Never re-emit full unchanged files.';
     formatted.push({ role: 'system', content: ctx });
   }
 
-  const REDO_WORDS = ['redo', 'rebuild', 'try again', 'again', 'restart', 'regenerate', 're-do', 'fix'];
+  const REDO_WORDS = ['redo', 'rebuild', 'try again', 'again', 'restart', 'regenerate', 're-do', 'fix from scratch'];
   messages.forEach((msg, idx) => {
     const isLast = idx === messages.length - 1;
     let content = msg.content || '';
     if (isLast && (msg.role === 'user' || !msg.role)) {
       const lower = content.trim().toLowerCase();
-      if (REDO_WORDS.includes(lower)) {
-        content = `User says: "${msg.content}". Re-synthesize and output the full complete working app inside <<<FILE:src/App.jsx>>> FIRST. Use public HTTPS Unsplash image URLs for any hero/gallery graphics. React 18 JSX only — NO <!DOCTYPE html>. Do NOT output package.json or vite.config.js.`;
+      if (REDO_WORDS.some(w => lower.includes(w))) {
+        content = `User says: "${msg.content}". Re-synthesize and output the full complete working app inside <<<FILE:src/App.jsx>>> FIRST. Use public HTTPS Unsplash image URLs for graphics. React 18 JSX only — NO <!DOCTYPE html>.`;
       } else if (/img|image|picture|photo|logo/i.test(lower) && /change|replace|update|broken|fix|exist/i.test(lower)) {
-        content = `User says: "${msg.content}". Update the image src with a high-resolution, working public HTTPS Unsplash URL (e.g. https://images.unsplash.com/photo-1635805737707-575885ab0820?w=1200 for comic/superhero themes, or topic-appropriate Unsplash photo). Output ONLY the updated <<<FILE:src/App.jsx>>>. Do NOT output package.json or extra files.`;
+        content = `User says: "${msg.content}". Update the image src with a high-resolution, working public HTTPS Unsplash URL. Output ONLY a surgical patch inside <<<PATCH:src/App.jsx>>> using <<<< SEARCH ... ==== REPLACE ... >>>>.`;
       } else {
         const isBackendReq = /backend|server|api|database|express|endpoint|sql|postgres|route|fullstack|full-stack/i.test(content);
         if (isBackendReq) {
-          content += '\n\n[INSTRUCTION: User requested backend/full-stack features. Output complete full-stack code. Emit <<<FILE:src/App.jsx>>> FIRST for instant preview, followed by backend files (<<<FILE:server/index.js>>>, <<<FILE:server/routes/api.js>>>, <<<FILE:server/db/schema.sql>>>) and <<<FILE:src/services/api.js>>>. Include working mock fallbacks in api.js so the live preview functions without network errors.]';
+          content += '\n\n[INSTRUCTION: User requested backend/full-stack features. Emit <<<FILE:src/App.jsx>>> FIRST, then backend files (<<<FILE:server/index.js>>>, <<<FILE:server/routes/api.js>>>, <<<FILE:server/db/schema.sql>>>) and <<<FILE:src/services/api.js>>> with graceful mock fallbacks.]';
+        } else if (hasExistingCode) {
+          content += '\n\n[INSTRUCTION: You are updating existing code. Output ONLY surgical search-replace patches inside <<<PATCH:filepath>>> using <<<< SEARCH ... ==== REPLACE ... >>>> blocks. Keep changes minimal to conserve tokens. Do NOT re-emit full files.]';
         } else {
-          content += '\n\n[INSTRUCTION: Output complete React 18 JSX code inside <<<FILE:src/App.jsx>>> as the VERY FIRST file, followed by <<<FILE:src/index.css>>>. Do NOT output CSS before src/App.jsx. Zero chatter.]';
+          content += '\n\n[INSTRUCTION: Output complete React 18 JSX code inside <<<FILE:src/App.jsx>>> as the VERY FIRST file, followed by <<<FILE:src/index.css>>>. Zero chatter outside delimiters.]';
         }
       }
     }
@@ -209,6 +166,7 @@ export async function POST(req) {
     // 4. Resolve Upstream Provider (Zero model restrictions!)
     // If user provided a custom key, check provider prefix
     const groqEnvKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+    const geminiEnvKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
     const isDirectGroq = (isByok && customApiKey.startsWith('gsk_')) || (model.startsWith('groq/') && Boolean(groqEnvKey));
     const isDirectGemini = (isByok && (customApiKey.startsWith('AIzaSy') || customApiKey.startsWith('AQ.'))) ||
       ((model.includes('gemini') || model === 'gemini-3.6-flash' || model === 'google/gemini-3.6-flash') && Boolean(geminiEnvKey));

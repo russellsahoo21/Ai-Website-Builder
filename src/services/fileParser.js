@@ -9,6 +9,7 @@
  */
 
 import { resolveFileConflicts, isHtmlDocument } from '../utils/fileConflictResolver.js';
+import { applySearchReplacePatch } from '../utils/diffApplier.js';
 
 const MIN_CONTENT_LENGTH = 20;
 
@@ -26,7 +27,8 @@ function cleanFilename(raw) {
 
 function normalizeFilePath(name) {
   if (!name) return 'src/App.jsx';
-  if (name === 'App.jsx' || name === 'App.js') return 'src/App.jsx';
+  const lower = name.toLowerCase().replace(/^[./\\]+/, '');
+  if (lower === 'app.jsx' || lower === 'app.js' || lower === 'srcapp.jsx' || lower === 'src/app.jsx' || lower === 'src/app.js') return 'src/App.jsx';
   if (name === 'styles.css' || name === 'style.css' || name === 'src/styles.css') return 'src/index.css';
   if (name.startsWith('components/') || name.startsWith('hooks/') || name.startsWith('utils/') || name.startsWith('services/')) return `src/${name}`;
   // Explicitly preserve backend and database directories
@@ -66,12 +68,39 @@ function classifyContent(content) {
 
 /**
  * Parses raw AI response text and extracts structured files.
+ * Supports both full file generation (<<<FILE:...>>>) and surgical diffs (<<<PATCH:...>>>).
+ *
+ * @param {string} text
+ * @param {Object} existingFiles - Map of current workspace files to apply patches onto
  * @returns {{ files: Object, needsReactConversion: boolean }}
  */
-export function parseGeneratedFiles(text) {
+export function parseGeneratedFiles(text, existingFiles = {}) {
   if (!text || typeof text !== 'string') return { files: {}, needsReactConversion: false };
 
   const raw = {};
+
+  // Strategy 0: <<<PATCH:...>>> or <<<DIFF:...>>> delimiters (for surgical edits)
+  const patchRegex = /<<<(?:PATCH|DIFF)(?::\s*([^\r\n>]+?))?\s*>>>([\s\S]*?)(?:<<<END_(?:PATCH|DIFF)>*|(?=<<<(?:PATCH|DIFF|FILE):)|\s*$)/g;
+  let patchMatch;
+  while ((patchMatch = patchRegex.exec(text)) !== null) {
+    const rawTarget = patchMatch[1] ? cleanFilename(patchMatch[1]) : 'src/App.jsx';
+    const name = normalizeFilePath(rawTarget);
+    let patchContent = patchMatch[2].trim().replace(/<<<END_(?:PATCH|DIFF)>*/g, '').trim();
+    if (name && patchContent) {
+      // Find existing base file content (checking normalized paths)
+      const baseCode = existingFiles[name] ||
+        existingFiles[name.replace(/^src\//, '')] ||
+        (name.includes('App') ? (existingFiles['src/App.jsx'] || existingFiles['App.jsx']) : '') ||
+        '';
+
+      if (baseCode) {
+        const patchResult = applySearchReplacePatch(baseCode, patchContent);
+        if (patchResult.success && patchResult.content.length >= MIN_CONTENT_LENGTH) {
+          raw[name] = patchResult.content;
+        }
+      }
+    }
+  }
 
   // Strategy 1: <<<FILE:...>>> delimiters (bounded by <<<END_FILE>>>, next file start, or EOF)
   const fileRegex = /<<<FILE:\s*([^\r\n>]+?)\s*>>>([\s\S]*?)(?:<<<END_FILE>>>|(?=<<<FILE:)|\s*$)/g;

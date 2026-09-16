@@ -202,7 +202,7 @@ export async function streamGenerateWebsite({
           if (delta) {
             fullText += delta;
             if (onChunk) onChunk(delta, fullText);
-            const parsed = parseGeneratedFiles(fullText);
+            const parsed = parseGeneratedFiles(fullText, currentFiles);
             if (Object.keys(parsed.files).length > 0 && onFileParsed) {
               onFileParsed(parsed);
             }
@@ -217,17 +217,24 @@ export async function streamGenerateWebsite({
 
     // 3. Record tokens used in client ledger — 1:1 match with API provider bill
     let totalConsumed;
+    let isEstimated = false;
     if (exactProviderUsage && typeof exactProviderUsage.total_tokens === 'number' && exactProviderUsage.total_tokens > 0) {
       totalConsumed = exactProviderUsage.total_tokens;
-      console.log(`[Token Usage] Billed exact provider tokens: ${totalConsumed} (Prompt: ${exactProviderUsage.prompt_tokens}, Completion: ${exactProviderUsage.completion_tokens})`);
+      console.log(`[Token Usage] Billed exact provider tokens: ${totalConsumed} (Prompt: ${exactProviderUsage.prompt_tokens}, Completion: ${exactProviderUsage.completion_tokens}, Raw:`, exactProviderUsage, ')');
     } else {
+      isEstimated = true;
       const completionTokens = Math.ceil(fullText.length / 3.8);
-      totalConsumed = (tokensOptimized || 1000) + completionTokens;
-      console.log(`[Token Usage] Provider usage omitted from stream, recorded: ${totalConsumed}`);
+      totalConsumed = (tokensOptimized || 0) + completionTokens;
+      console.log(`[Token Usage] Provider usage omitted from stream, measured: ${totalConsumed} (Prompt: ${tokensOptimized || 0}, Completion: ${completionTokens})`);
     }
-    recordTokenUsage(totalConsumed);
+    recordTokenUsage(totalConsumed, {
+      isEstimated,
+      rawProviderUsage: exactProviderUsage,
+      promptTokens: exactProviderUsage?.prompt_tokens ?? tokensOptimized ?? 0,
+      completionTokens: exactProviderUsage?.completion_tokens ?? Math.ceil(fullText.length / 3.8),
+    });
 
-    const finalParsed = parseGeneratedFiles(fullText);
+    const finalParsed = parseGeneratedFiles(fullText, currentFiles);
     if (onComplete) onComplete(fullText, finalParsed);
     return { fullText, ...finalParsed };
   } catch (error) {
