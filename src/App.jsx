@@ -40,6 +40,7 @@ import {
   setCurrentUserId,
   syncProjectsWithCloud
 } from './services/projectService';
+import { setCurrentUserId as setTokenCurrentUserId } from './services/tokenService';
 import { syncUserProfile } from './services/dbService';
 import { getSession } from './services/authService';
 
@@ -117,13 +118,15 @@ export default function App({ initialRoute }) {
   // Cloud Database Sync on Login
   useEffect(() => {
     if (!isLoaded) return;
-    if (isSignedIn && user) {
+    if (isSignedIn && user?.id) {
       setCurrentUserId(user.id);
+      setTokenCurrentUserId(user.id);
+      setProjects(getAllProjects(user.id));
       syncUserProfile(user);
       syncProjectsWithCloud(user.id).then(syncedProjects => {
         if (syncedProjects && syncedProjects.length > 0) {
           setProjects(syncedProjects);
-          const activeId = getActiveProjectId();
+          const activeId = getActiveProjectId(user.id);
           const active = syncedProjects.find(p => p.id === activeId) || syncedProjects[0];
           if (active) {
             setActiveProjectIdState(active.id);
@@ -134,8 +137,9 @@ export default function App({ initialRoute }) {
       });
     } else {
       setCurrentUserId(null);
+      setTokenCurrentUserId(null);
     }
-  }, [isLoaded, isSignedIn, user]);
+  }, [isLoaded, isSignedIn, user?.id]);
 
   // Auto-save active project changes to localStorage & Cloud (debounced)
   useEffect(() => {
@@ -177,6 +181,7 @@ export default function App({ initialRoute }) {
   const { handleSendMessage, handleCancelGeneration, executeAutoFix, autoFixCountRef, telemetry } = useGeneration({
     apiKey,
     selectedModel,
+    userId: user?.id,
     filesRef,
     messagesRef,
     apiKeyRef,

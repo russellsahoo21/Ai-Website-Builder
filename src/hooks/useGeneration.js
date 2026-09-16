@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { streamGenerateWebsite } from '../services/aiService.js';
 import { parseGeneratedFiles } from '../services/fileParser.js';
 import { getFriendlyMessage, isRecoverable, buildFixPrompt } from '../sandbox/errorReporter.js';
@@ -16,6 +16,7 @@ const RETRY_DELAY_MS = 8000;
  * @param {Object} params
  * @param {string} params.apiKey
  * @param {string} params.selectedModel
+ * @param {string} [params.userId]
  * @param {Object} params.filesRef  - ref to current files
  * @param {Object} params.messagesRef - ref to current messages
  * @param {Function} params.setFiles
@@ -26,6 +27,7 @@ const RETRY_DELAY_MS = 8000;
 export function useGeneration({
   apiKey,
   selectedModel,
+  userId,
   filesRef,
   messagesRef,
   apiKeyRef,
@@ -35,6 +37,8 @@ export function useGeneration({
   setIsGenerating,
   onRefresh,
 }) {
+  const userIdRef = useRef(userId);
+  useEffect(() => { userIdRef.current = userId; }, [userId]);
   const abortControllerRef = useRef(null);
   const autoFixCountRef = useRef(0);
   const lastAutoFixTimeRef = useRef(0);
@@ -136,6 +140,7 @@ export function useGeneration({
       await streamGenerateWebsite({
         apiKey: apiKeyRef.current,
         model: selectedModelRef.current,
+        userId: userIdRef.current,
         messages: [...currentMessages, { role: 'user', content: fixPrompt }],
         currentFiles,
         signal: abortControllerRef.current.signal,
@@ -232,6 +237,7 @@ export function useGeneration({
       await streamGenerateWebsite({
         apiKey,
         model: selectedModel,
+        userId: userIdRef.current,
         messages: messagesForEngine,
         currentFiles: filesRef.current,
         signal: abortControllerRef.current.signal,

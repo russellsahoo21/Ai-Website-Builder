@@ -32,6 +32,30 @@ export function getCurrentUserId() {
   return currentUserId;
 }
 
+export function getProjectStorageKey(userId = currentUserId) {
+  const effectiveUser = userId || currentUserId;
+  return effectiveUser ? `aethercraft_saved_projects_${effectiveUser}` : STORAGE_KEY;
+}
+
+/**
+ * Returns strictly 2 curated default starter projects.
+ */
+export function getDefaultStarterProjects() {
+  return (STARTER_TEMPLATES || []).slice(0, 2).map((tmpl, idx) => ({
+    id: `seeded_${tmpl.id}`,
+    name: tmpl.name,
+    prompt: tmpl.tagline || tmpl.description,
+    files: ensureStandardReactStructure(tmpl.files || {}),
+    messages: [
+      { role: 'ai', content: `Starter template "${tmpl.name}" ready to inspect and customize.` }
+    ],
+    createdAt: new Date(Date.now() - (idx + 1) * 86400000).toISOString(),
+    updatedAt: new Date(Date.now() - (idx + 1) * 3600000).toISOString(),
+    fileCount: Object.keys(tmpl.files || {}).length,
+    synced: false
+  }));
+}
+
 // Generate clean title from prompt if no name provided
 export function deriveProjectName(prompt) {
   if (!prompt || typeof prompt !== 'string') return 'Untitled Project';
@@ -43,31 +67,35 @@ export function deriveProjectName(prompt) {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-// Get all saved projects from local cache
-export function getAllProjects() {
+// Get all saved projects from local cache (user-scoped)
+export function getAllProjects(userId = currentUserId) {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const storageKey = getProjectStorageKey(userId);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) {
-      // Seed with initial template projects if none exist
-      const seeded = (STARTER_TEMPLATES || []).slice(0, 2).map((tmpl, idx) => ({
-        id: `seeded_${tmpl.id}`,
-        name: tmpl.name,
-        prompt: tmpl.tagline || tmpl.description,
-        files: ensureStandardReactStructure(tmpl.files || {}),
-        messages: [
-          { role: 'ai', content: `Starter template "${tmpl.name}" ready to inspect and customize.` }
-        ],
-        createdAt: new Date(Date.now() - (idx + 1) * 86400000).toISOString(),
-        updatedAt: new Date(Date.now() - (idx + 1) * 3600000).toISOString(),
-        fileCount: Object.keys(tmpl.files || {}).length,
-        synced: false
-      }));
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(seeded));
+      // Seed with initial template projects (strictly 2 default projects)
+      const seeded = getDefaultStarterProjects();
+      localStorage.setItem(storageKey, JSON.stringify(seeded));
       return seeded;
     }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
+    let parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      const seeded = getDefaultStarterProjects();
+      localStorage.setItem(storageKey, JSON.stringify(seeded));
+      return seeded;
+    }
+
+    // Recalibration: Enforce exactly 2 default starter projects
+    const recalKey = `aethercraft_two_defaults_v5_${storageKey}`;
+    if (!localStorage.getItem(recalKey)) {
+      const isDefaultSet = parsed.length >= 3 && parsed.some(p => p.id?.startsWith('seeded_') || p.id?.startsWith('proj_'));
+      if (parsed.length > 2 && isDefaultSet) {
+        parsed = parsed.slice(0, 2);
+        localStorage.setItem(storageKey, JSON.stringify(parsed));
+      }
+      localStorage.setItem(recalKey, 'true');
+    }
     
     // Automatically upgrade any legacy flat project to standard React structure
     let hasUpgrades = false;
@@ -86,33 +114,37 @@ export function getAllProjects() {
     });
 
     if (hasUpgrades) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(upgraded));
+      localStorage.setItem(storageKey, JSON.stringify(upgraded));
     }
     return upgraded;
   } catch (err) {
     console.error('Failed to load projects from storage:', err);
-    return [];
+    return getDefaultStarterProjects();
   }
 }
 
 // Get project by ID
-export function getProjectById(id) {
-  const all = getAllProjects();
+export function getProjectById(id, userId = currentUserId) {
+  const all = getAllProjects(userId);
   return all.find(p => p.id === id) || null;
 }
 
-// Get the active project ID
-export function getActiveProjectId() {
+// Get the active project ID (user-scoped)
+export function getActiveProjectId(userId = currentUserId) {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(ACTIVE_ID_KEY) || null;
+  const key = userId ? `aethercraft_active_project_id_${userId}` : ACTIVE_ID_KEY;
+  return localStorage.getItem(key) || localStorage.getItem(ACTIVE_ID_KEY) || null;
 }
 
-// Set active project ID
-export function setActiveProjectId(id) {
+// Set active project ID (user-scoped)
+export function setActiveProjectId(id, userId = currentUserId) {
   if (typeof window === 'undefined') return;
+  const key = userId ? `aethercraft_active_project_id_${userId}` : ACTIVE_ID_KEY;
   if (id) {
+    localStorage.setItem(key, id);
     localStorage.setItem(ACTIVE_ID_KEY, id);
   } else {
+    localStorage.removeItem(key);
     localStorage.removeItem(ACTIVE_ID_KEY);
   }
 }
@@ -122,7 +154,8 @@ export function saveProject(project, userId = currentUserId) {
   if (typeof window === 'undefined') return null;
   if (!project || !project.id) return null;
   try {
-    const all = getAllProjects();
+    const storageKey = getProjectStorageKey(userId);
+    const all = getAllProjects(userId);
     const existingIdx = all.findIndex(p => p.id === project.id);
     const updatedProject = {
       ...project,
@@ -136,7 +169,7 @@ export function saveProject(project, userId = currentUserId) {
       all.unshift(updatedProject);
     }
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+    localStorage.setItem(storageKey, JSON.stringify(all));
 
     // Background cloud sync if user is signed in
     if (userId && isCloudDbConfigured()) {
@@ -152,9 +185,10 @@ export function saveProject(project, userId = currentUserId) {
   }
 }
 
-// Create a new project
+// Create a new project (user-scoped)
 export function createNewProject({ name, prompt = '', files = {}, messages = [] } = {}, userId = currentUserId) {
   if (typeof window === 'undefined') return null;
+  const storageKey = getProjectStorageKey(userId);
   const id = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const finalName = name || deriveProjectName(prompt) || 'New Project';
   const structuredFiles = ensureStandardReactStructure(files || {});
@@ -170,10 +204,10 @@ export function createNewProject({ name, prompt = '', files = {}, messages = [] 
     synced: false
   };
 
-  const all = getAllProjects();
+  const all = getAllProjects(userId);
   all.unshift(newProj);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
-  setActiveProjectId(id);
+  localStorage.setItem(storageKey, JSON.stringify(all));
+  setActiveProjectId(id, userId);
 
   // Background cloud sync
   if (userId && isCloudDbConfigured()) {
@@ -185,15 +219,16 @@ export function createNewProject({ name, prompt = '', files = {}, messages = [] 
   return newProj;
 }
 
-// Delete project
+// Delete project (user-scoped)
 export function deleteProject(id, userId = currentUserId) {
   if (typeof window === 'undefined') return [];
   try {
-    const all = getAllProjects();
+    const storageKey = getProjectStorageKey(userId);
+    const all = getAllProjects(userId);
     const filtered = all.filter(p => p.id !== id);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
-    if (getActiveProjectId() === id) {
-      setActiveProjectId(filtered.length > 0 ? filtered[0].id : null);
+    localStorage.setItem(storageKey, JSON.stringify(filtered));
+    if (getActiveProjectId(userId) === id) {
+      setActiveProjectId(filtered.length > 0 ? filtered[0].id : null, userId);
     }
 
     // Cloud delete
@@ -206,14 +241,15 @@ export function deleteProject(id, userId = currentUserId) {
     return filtered;
   } catch (err) {
     console.error('Failed to delete project:', err);
-    return getAllProjects();
+    return getAllProjects(userId);
   }
 }
 
-// Duplicate an existing project
+// Duplicate an existing project (user-scoped)
 export function duplicateProject(id, userId = currentUserId) {
   if (typeof window === 'undefined') return null;
-  const orig = getProjectById(id);
+  const storageKey = getProjectStorageKey(userId);
+  const orig = getProjectById(id, userId);
   if (!orig) return null;
   const newProj = {
     ...orig,
@@ -223,9 +259,9 @@ export function duplicateProject(id, userId = currentUserId) {
     updatedAt: new Date().toISOString(),
     synced: false
   };
-  const all = getAllProjects();
+  const all = getAllProjects(userId);
   all.unshift(newProj);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(all));
+  localStorage.setItem(storageKey, JSON.stringify(all));
 
   if (userId && isCloudDbConfigured()) {
     saveCloudProject(userId, newProj).catch(err =>
@@ -239,10 +275,11 @@ export function duplicateProject(id, userId = currentUserId) {
 // Synchronize all user projects with Supabase Cloud DB
 export async function syncProjectsWithCloud(userId) {
   if (typeof window === 'undefined') return [];
-  if (!userId || !isCloudDbConfigured()) return getAllProjects();
+  if (!userId || !isCloudDbConfigured()) return getAllProjects(userId);
 
   try {
     setCurrentUserId(userId);
+    const storageKey = getProjectStorageKey(userId);
 
     // 1. Auto-migrate any un-synced local projects to Cloud DB
     await migrateLocalProjectsToCloud(userId);
@@ -252,14 +289,14 @@ export async function syncProjectsWithCloud(userId) {
 
     if (cloudProjects && cloudProjects.length > 0) {
       // Overwrite / merge into local storage cache
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudProjects));
+      localStorage.setItem(storageKey, JSON.stringify(cloudProjects));
       return cloudProjects;
     }
 
-    return getAllProjects();
+    return getAllProjects(userId);
   } catch (err) {
     console.error('[projectService] syncProjectsWithCloud error:', err);
-    return getAllProjects();
+    return getAllProjects(userId);
   }
 }
 

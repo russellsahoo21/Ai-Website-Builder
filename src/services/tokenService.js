@@ -1,7 +1,7 @@
 /**
  * tokenService.js
  * Token Quota & Consumption Tracker
- * Tracks monthly token consumption (100,000 Free Tier cap).
+ * Tracks monthly token consumption (100,000 Free Tier cap per individual user).
  * Provides quota verification, client telemetry, and local cache with server sync.
  */
 
@@ -9,8 +9,16 @@ import { estimateTokens } from '../utils/tokenOptimizer.js';
 
 export { estimateTokens };
 export const FREE_TIER_MONTHLY_TOKEN_CAP = 100000;
-const STORAGE_KEY_USAGE = 'aethercraft_monthly_token_usage';
-const STORAGE_KEY_PERIOD = 'aethercraft_token_period_month';
+
+let currentUserId = null;
+
+export function setCurrentUserId(userId) {
+  currentUserId = userId || null;
+}
+
+export function getCurrentUserId() {
+  return currentUserId;
+}
 
 /**
  * Returns the current billing period string: "YYYY-MM"
@@ -22,12 +30,25 @@ export function getCurrentPeriod() {
   return `${year}-${month}`;
 }
 
+function getStorageKeys(userId) {
+  const effectiveUser = userId || currentUserId || 'guest';
+  const period = getCurrentPeriod();
+  return {
+    effectiveUser,
+    period,
+    usageKey: `aethercraft_token_usage_${effectiveUser}_${period}`,
+    periodKey: `aethercraft_token_period_${effectiveUser}`,
+  };
+}
+
 /**
  * Retrieves the current user's token usage.
+ * Isolated per individual authenticated user (100,000 monthly credits each).
  * Automatically resets when entering a new calendar month.
- * @returns {{ used: number, total: number, remaining: number, percent: number, period: string }}
+ * @param {string} [userId] - Optional user ID (e.g. Clerk user ID)
+ * @returns {{ used: number, total: number, remaining: number, percent: number, period: string, userId: string }}
  */
-export function getTokenUsage() {
+export function getTokenUsage(userId = currentUserId) {
   if (typeof window === 'undefined') {
     return {
       used: 0,
@@ -35,28 +56,28 @@ export function getTokenUsage() {
       remaining: FREE_TIER_MONTHLY_TOKEN_CAP,
       percent: 0,
       period: getCurrentPeriod(),
+      userId: userId || 'guest',
     };
   }
 
-  const currentPeriod = getCurrentPeriod();
-  const storedPeriod = localStorage.getItem(STORAGE_KEY_PERIOD);
+  const { effectiveUser, period, usageKey, periodKey } = getStorageKeys(userId);
 
-  // New month: reset counter
-  if (storedPeriod !== currentPeriod) {
-    localStorage.setItem(STORAGE_KEY_PERIOD, currentPeriod);
-    localStorage.setItem(STORAGE_KEY_USAGE, '0');
+  // Clear legacy global un-scoped runaway count so it never contaminates any user
+  if (localStorage.getItem('aethercraft_monthly_token_usage')) {
+    localStorage.removeItem('aethercraft_monthly_token_usage');
   }
 
-  const raw = localStorage.getItem(STORAGE_KEY_USAGE);
-  let used = parseInt(raw || '0', 10) || 0;
+  const storedPeriod = localStorage.getItem(periodKey);
 
-  // Auto-healing: If an unpruned multi-file workspace caused an accidental runaway count (> 100k),
-  // recalibrate it down to a fair baseline of actual token usage.
-  if (used >= 100000 && !localStorage.getItem('aethercraft_recalibrated_v2')) {
-    used = 2450;
-    localStorage.setItem(STORAGE_KEY_USAGE, String(used));
-    localStorage.setItem('aethercraft_recalibrated_v2', 'true');
+  // New month: reset counter for this user
+  if (storedPeriod !== period) {
+    localStorage.setItem(periodKey, period);
+    localStorage.setItem(usageKey, '0');
   }
+
+  const raw = localStorage.getItem(usageKey);
+  let used = parseInt(raw || '0', 10);
+  if (isNaN(used) || used < 0) used = 0;
 
   const total = FREE_TIER_MONTHLY_TOKEN_CAP;
   const remaining = Math.max(0, total - used);
@@ -67,18 +88,20 @@ export function getTokenUsage() {
     total,
     remaining,
     percent,
-    period: currentPeriod,
+    period,
+    userId: effectiveUser,
   };
 }
 
 /**
  * Resets or recalibrates the user's monthly token usage.
  */
-export function resetTokenUsage(amount = 0) {
+export function resetTokenUsage(amount = 0, userId = currentUserId) {
   if (typeof window === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY_USAGE, String(amount));
-  localStorage.setItem('aethercraft_recalibrated_v2', 'true');
-  const usage = getTokenUsage();
+  const { usageKey, periodKey, period, effectiveUser } = getStorageKeys(userId);
+  localStorage.setItem(periodKey, period);
+  localStorage.setItem(usageKey, String(Math.max(0, amount)));
+  const usage = getTokenUsage(effectiveUser);
   try {
     window.dispatchEvent(new CustomEvent('tokenUsageUpdated', { detail: usage }));
   } catch (e) {}
@@ -90,18 +113,20 @@ export function resetTokenUsage(amount = 0) {
  * Dispatches a custom event 'tokenUsageUpdated' so UI components refresh instantly.
  * @param {number} tokens - Number of tokens consumed
  * @param {Object} [metadata] - Optional usage details (isEstimated, rawProviderUsage)
- * @returns {{ used: number, total: number, remaining: number, percent: number }}
+ * @param {string} [userId] - Optional user ID
+ * @returns {{ used: number, total: number, remaining: number, percent: number, userId: string }}
  */
-export function recordTokenUsage(tokens = 0, metadata = {}) {
-  if (typeof window === 'undefined' || !tokens) return getTokenUsage();
+export function recordTokenUsage(tokens = 0, metadata = {}, userId = currentUserId) {
+  if (typeof window === 'undefined' || !tokens) return getTokenUsage(userId);
 
-  const current = getTokenUsage();
+  const current = getTokenUsage(userId);
   const updatedUsed = current.used + Math.max(0, tokens);
+  const { usageKey, effectiveUser } = getStorageKeys(userId);
 
-  localStorage.setItem(STORAGE_KEY_USAGE, String(updatedUsed));
+  localStorage.setItem(usageKey, String(updatedUsed));
   if (metadata?.rawProviderUsage) {
     try {
-      localStorage.setItem('aethercraft_last_raw_usage', JSON.stringify(metadata.rawProviderUsage));
+      localStorage.setItem(`aethercraft_last_raw_usage_${effectiveUser}`, JSON.stringify(metadata.rawProviderUsage));
     } catch (e) {}
   }
 
@@ -111,6 +136,7 @@ export function recordTokenUsage(tokens = 0, metadata = {}) {
     remaining: Math.max(0, current.total - updatedUsed),
     percent: Math.min(100, Math.round((updatedUsed / current.total) * 100)),
     period: current.period,
+    userId: effectiveUser,
     lastTurn: {
       tokens,
       isEstimated: Boolean(metadata.isEstimated),
@@ -129,14 +155,15 @@ export function recordTokenUsage(tokens = 0, metadata = {}) {
  * Checks if the user has sufficient quota for an upcoming generation.
  * @param {number} estimatedTokens
  * @param {boolean} isByok - If user provides their own API key, quota is bypassed
+ * @param {string} [userId] - Optional user ID
  * @returns {{ allowed: boolean, reason?: string }}
  */
-export function verifyTokenQuota(estimatedTokens = 1000, isByok = false) {
+export function verifyTokenQuota(estimatedTokens = 1000, isByok = false, userId = currentUserId) {
   if (isByok) {
     return { allowed: true, quotaBypassed: true };
   }
 
-  const usage = getTokenUsage();
+  const usage = getTokenUsage(userId);
   if (usage.used >= usage.total) {
     return {
       allowed: false,

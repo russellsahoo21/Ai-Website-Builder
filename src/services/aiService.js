@@ -103,6 +103,7 @@ export async function streamGenerateWebsite({
   model = DEFAULT_MODEL,
   messages = [],
   currentFiles = {},
+  userId = '',
   signal,
   onChunk,
   onFileParsed,
@@ -144,6 +145,7 @@ export async function streamGenerateWebsite({
           messages,
           currentFiles,
           customApiKey: apiKey || undefined,
+          userId: userId || undefined,
         }),
       });
     } catch (netErr) {
@@ -232,7 +234,7 @@ export async function streamGenerateWebsite({
       rawProviderUsage: exactProviderUsage,
       promptTokens: exactProviderUsage?.prompt_tokens ?? tokensOptimized ?? 0,
       completionTokens: exactProviderUsage?.completion_tokens ?? Math.ceil(fullText.length / 3.8),
-    });
+    }, userId);
 
     const finalParsed = parseGeneratedFiles(fullText, currentFiles);
     if (onComplete) onComplete(fullText, finalParsed);

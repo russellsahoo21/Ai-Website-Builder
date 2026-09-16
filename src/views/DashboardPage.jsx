@@ -64,7 +64,7 @@ import { downloadProjectZip } from '../utils/zipExporter.js';
 import { buildPreviewDoc } from '../utils/previewBuilder.js';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates.js';
 import { AVAILABLE_MODELS, testOpenRouterConnection } from '../services/aiService.js';
-import { getTokenUsage } from '../services/tokenService.js';
+import { getTokenUsage, setCurrentUserId as setTokenCurrentUserId } from '../services/tokenService.js';
 import FeedbackView from './FeedbackView.jsx';
 
 export const MAX_FREE_PROJECTS = 5;
@@ -282,13 +282,24 @@ export default function DashboardPage({
   const [previewModalProject, setPreviewModalProject] = useState(null);
   const [previewDeviceMode, setPreviewDeviceMode] = useState('desktop');
   
-  // Real-time Monthly Token Usage Tracking (100,000 cap)
-  const [tokenUsage, setTokenUsage] = useState(() => getTokenUsage());
+  // Real-time Monthly Token Usage Tracking (100,000 cap per individual user)
+  const [tokenUsage, setTokenUsage] = useState(() => getTokenUsage(user?.id));
   useEffect(() => {
-    const handleTokenUpdate = () => setTokenUsage(getTokenUsage());
+    if (user?.id) {
+      setTokenCurrentUserId(user.id);
+    }
+    setTokenUsage(getTokenUsage(user?.id));
+  }, [user?.id]);
+
+  useEffect(() => {
+    const handleTokenUpdate = (e) => {
+      if (!e?.detail?.userId || e.detail.userId === (user?.id || 'guest')) {
+        setTokenUsage(getTokenUsage(user?.id));
+      }
+    };
     window.addEventListener('tokenUsageUpdated', handleTokenUpdate);
     return () => window.removeEventListener('tokenUsageUpdated', handleTokenUpdate);
-  }, []);
+  }, [user?.id]);
   
   // Persistent Sidebar View State
   const [activeSidebarTab, setActiveSidebarTab] = useState(() => {
@@ -717,17 +728,17 @@ export default function DashboardPage({
                       <span>AI Tokens / Mo</span>
                     </span>
                     <span className="font-mono text-[11px] font-bold text-cyan-300">
-                      {tokenUsage.used.toLocaleString()} / 100k
+                      {(tokenUsage?.used || 0).toLocaleString()} / 100k
                     </span>
                   </div>
                   <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden mb-1.5">
                     <div 
                       className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-cyan-500 to-indigo-500"
-                      style={{ width: `${Math.min(100, (tokenUsage.used / 100000) * 100)}%` }}
+                      style={{ width: `${Math.min(100, (((tokenUsage?.used || 0) / 100000) * 100))}%` }}
                     />
                   </div>
                   <div className="text-[10px] text-zinc-400 flex items-center justify-between">
-                    <span>{tokenUsage.remaining.toLocaleString()} left</span>
+                    <span>{(tokenUsage?.remaining ?? 100000).toLocaleString()} left</span>
                     <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50 font-mono">
                       ALL MODELS
                     </span>
