@@ -87,10 +87,9 @@ export function getAllProjects(userId = currentUserId) {
     }
 
     // Recalibration: Enforce exactly 2 default starter projects
-    const recalKey = `aethercraft_two_defaults_v5_${storageKey}`;
+    const recalKey = `aethercraft_two_defaults_v7_${storageKey}`;
     if (!localStorage.getItem(recalKey)) {
-      const isDefaultSet = parsed.length >= 3 && parsed.some(p => p.id?.startsWith('seeded_') || p.id?.startsWith('proj_'));
-      if (parsed.length > 2 && isDefaultSet) {
+      if (parsed.length > 2) {
         parsed = parsed.slice(0, 2);
         localStorage.setItem(storageKey, JSON.stringify(parsed));
       }
@@ -285,9 +284,20 @@ export async function syncProjectsWithCloud(userId) {
     await migrateLocalProjectsToCloud(userId);
 
     // 2. Fetch full list of projects from Cloud DB
-    const cloudProjects = await fetchCloudProjects(userId);
+    let cloudProjects = await fetchCloudProjects(userId);
 
     if (cloudProjects && cloudProjects.length > 0) {
+      // If cloud DB has > 2 projects, prune down to exactly 2 default projects
+      const pruneKey = `aethercraft_cloud_two_defaults_v3_${userId}`;
+      if (!localStorage.getItem(pruneKey) && cloudProjects.length > 2) {
+        const toDelete = cloudProjects.slice(2);
+        for (const p of toDelete) {
+          deleteCloudProject(userId, p.id).catch(() => {});
+        }
+        cloudProjects = cloudProjects.slice(0, 2);
+        localStorage.setItem(pruneKey, 'true');
+      }
+
       // Overwrite / merge into local storage cache
       localStorage.setItem(storageKey, JSON.stringify(cloudProjects));
       return cloudProjects;

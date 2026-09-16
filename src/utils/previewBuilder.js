@@ -4,8 +4,9 @@
  * Lucide icons, Tailwind CSS, and vanilla HTML/CSS/JS applications.
  */
 
-export function buildPreviewDoc(files) {
+export function buildPreviewDoc(files, options = {}) {
   if (!files || Object.keys(files).length === 0) return '';
+  const shouldReportErrors = options.reportErrors !== false && !options.isThumbnail;
 
   const isHtmlDoc = (code) => {
     if (!code || typeof code !== 'string') return false;
@@ -418,7 +419,8 @@ export function buildPreviewDoc(files) {
 
   <!-- Explicit Runner with Polling: Guarantees execution even if DOMContentLoaded already fired -->
   <script>
-    // Silent global error capture — postMessage to parent for BTS repair
+    ${shouldReportErrors ? `
+    // Global error capture — postMessage to parent
     window.addEventListener('error', function(e) {
       try {
         window.parent.postMessage({
@@ -436,6 +438,7 @@ export function buildPreviewDoc(files) {
         }, '*');
       } catch (err) {}
     });
+    ` : ''}
 
     function launchAetherCraft() {
       if (typeof Babel === 'undefined' || typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
@@ -457,12 +460,14 @@ export function buildPreviewDoc(files) {
         runner();
       } catch (err) {
         console.error('[AetherCraft] Compilation error:', err.message);
+        ${shouldReportErrors ? `
         try {
           window.parent.postMessage({
             type: 'SANDBOX_RUNTIME_ERROR',
             error: { message: err.message, stack: err.stack || '' }
           }, '*');
         } catch (e) {}
+        ` : ''}
       }
     }
 

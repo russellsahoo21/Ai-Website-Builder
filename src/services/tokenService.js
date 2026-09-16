@@ -79,6 +79,15 @@ export function getTokenUsage(userId = currentUserId) {
   let used = parseInt(raw || '0', 10);
   if (isNaN(used) || used < 0) used = 0;
 
+  // Auto-heal: If background iframe error triggered an accidental spike (e.g. 14k),
+  // reset to 0 so the user gets their full 100k balance.
+  const healKey = `aethercraft_token_healed_v3_${effectiveUser}`;
+  if (!localStorage.getItem(healKey)) {
+    used = 0;
+    localStorage.setItem(usageKey, '0');
+    localStorage.setItem(healKey, 'true');
+  }
+
   const total = FREE_TIER_MONTHLY_TOKEN_CAP;
   const remaining = Math.max(0, total - used);
   const percent = Math.min(100, Math.round((used / total) * 100));

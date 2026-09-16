@@ -21,10 +21,11 @@ const BENIGN_ERROR_PATTERNS = [
  *
  * @param {Object} params
  * @param {boolean} params.isGenerating - Whether generation is actively running
+ * @param {boolean} [params.enabled] - Whether message listening is active
  * @param {Function} params.onRuntimeError - Called with (errorMsg) on SANDBOX_RUNTIME_ERROR
  * @param {Function} params.onManualFix - Called with (errorMsg) on TRIGGER_AUTO_FIX
  */
-export function useSandboxMessages({ isGenerating = false, onRuntimeError, onManualFix }) {
+export function useSandboxMessages({ isGenerating = false, enabled = true, onRuntimeError, onManualFix }) {
   const lastHandledTimeRef = useRef(0);
   const isGeneratingRef = useRef(isGenerating);
 
@@ -33,6 +34,8 @@ export function useSandboxMessages({ isGenerating = false, onRuntimeError, onMan
   }, [isGenerating]);
 
   useEffect(() => {
+    if (!enabled) return;
+
     const handler = (event) => {
       // Security: only trust messages from our own sandboxed iframes
       if (!event.data || typeof event.data !== 'object') return;

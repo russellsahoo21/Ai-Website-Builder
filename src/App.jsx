@@ -192,10 +192,13 @@ export default function App({ initialRoute }) {
     onRefresh,
   });
 
-  // — Sandbox postMessage listener —
+  // — Sandbox postMessage listener (Studio only, never runs on dashboard or behind user's back) —
   useSandboxMessages({
     isGenerating,
-    onRuntimeError: useCallback((msg) => executeAutoFix(msg, false), [executeAutoFix]),
+    enabled: currentRoute === 'studio',
+    onRuntimeError: useCallback((msg) => {
+      console.warn('[Sandbox Runtime Warning]', msg);
+    }, []),
     onManualFix: useCallback((msg) => executeAutoFix(msg, true), [executeAutoFix]),
   });
 

@@ -116,7 +116,7 @@ const MODULAR_COMPONENTS = [
 function ProjectPreviewThumbnail({ files, title, onQuickPreview, onOpenStudio }) {
   const doc = useMemo(() => {
     try {
-      const raw = files ? buildPreviewDoc(files) : '';
+      const raw = files ? buildPreviewDoc(files, { isThumbnail: true, reportErrors: false }) : '';
       if (!raw) return '';
       // Inject scrollbar-hiding and clean-render CSS into preview thumbnail
       const noScrollCss = `
