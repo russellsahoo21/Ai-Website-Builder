@@ -48,10 +48,34 @@ export function buildPreviewDoc(files) {
         .replace(/\\'/g, "'")
         .replace(/\\"/g, '"');
 
-      // 1. Strip TypeScript type imports & all imports
+      // 1. Strip TypeScript type imports
       cl = cl.replace(/import\s+type\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
       cl = cl.replace(/import\s+type\s*\{[\s\S]*?\}\s*from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
-      cl = cl.replace(/import\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [import resolved via sandbox shim]');
+
+      // 1b. Shim default asset and component imports so variables are never undefined in JSX
+      // e.g. import reactLogo from './assets/react.svg' -> var reactLogo = window['reactLogo'] || "https://images.unsplash.com/...";
+      cl = cl.replace(/import\s+([A-Za-z0-9_]+)\s+from\s+['"\\].*?['"\\];?/g, (match, varName) => {
+        if (/^[A-Z]/.test(varName)) {
+          return `var ${varName} = window['${varName}'] || (() => null);`;
+        }
+        return `var ${varName} = window['${varName}'] || "https://images.unsplash.com/photo-1635805737707-575885ab0820?w=1200&auto=format&fit=crop&q=80";`;
+      });
+
+      // 1c. Shim destructured imports: import { Plus, Trash2 } from 'lucide-react'
+      cl = cl.replace(/import\s*\{([\s\S]*?)\}\s*from\s+['"\\].*?['"\\];?/g, (match, vars) => {
+        const declarations = vars.split(',').map(v => {
+          const parts = v.trim().split(/\s+as\s+/);
+          const name = (parts[1] || parts[0]).trim();
+          if (!name || name === 'default') return '';
+          if (/^[A-Z]/.test(name)) {
+            return `var ${name} = window['${name}'] || LucideProxy['${name}'] || (() => null);`;
+          }
+          return `var ${name} = window['${name}'] || "";`;
+        }).filter(Boolean).join('\n      ');
+        return declarations;
+      });
+
+      // 1d. Strip side-effect imports
       cl = cl.replace(/import\s+['"\\].*?['"\\];?/g, '// [side-effect import resolved]');
 
       // 2. Normalize exports
@@ -343,9 +367,16 @@ export function buildPreviewDoc(files) {
       }
       render() {
         if (this.state.hasError) {
-          // Show nothing — BTS repair handles this silently in the background.
-          // Returning null keeps the last rendered state visible.
-          return null;
+          return React.createElement('div', {
+            className: 'min-h-[500px] flex items-center justify-center p-8 bg-[#090a0f] text-zinc-300 font-sans'
+          }, React.createElement('div', {
+            className: 'max-w-md w-full bg-zinc-900/90 border border-zinc-800 rounded-2xl p-6 shadow-2xl text-center'
+          }, [
+            React.createElement('div', { key: 'icon', className: 'w-10 h-10 mx-auto mb-3 rounded-full bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 font-bold text-sm' }, '✦'),
+            React.createElement('h3', { key: 'title', className: 'text-base font-semibold text-white mb-2' }, 'Preview Rendering Update'),
+            React.createElement('p', { key: 'desc', className: 'text-xs text-zinc-400 mb-4' }, this.state.error?.message || 'Component mounting encountered an unrecognized reference.'),
+            React.createElement('p', { key: 'sub', className: 'text-xs text-zinc-500' }, 'Type "fix" or ask to update the component to recalibrate automatically.')
+          ]));
         }
         return this.props.children;
       }

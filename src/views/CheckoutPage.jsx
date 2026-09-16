@@ -1,3 +1,4 @@
+"use client";
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowLeft, 
@@ -29,14 +30,36 @@ const CHECKOUT_PLANS = {
     monthlyPriceINR: 1599,
     annualPriceINR: 1299, // per month (₹15,588/year)
     badge: 'Pro Subscription',
+    maxProjects: 50,
+    projectBadge: 'Up to 50 active projects',
     features: [
+      'Up to 50 active projects',
       'Unlimited generations',
       'Priority synthesis queue & 2x speed',
       'Custom domain publishing with auto-SSL',
       'Multi-turn architectural memory',
-      'Unlimited saved projects',
       'Full React 18 + Vite export suite',
       'Priority email & Discord engineering support'
+    ]
+  },
+  enterprise: {
+    id: 'enterprise',
+    name: 'Studio Unlimited',
+    tagline: 'For agencies, studios, and high-velocity creators.',
+    monthlyPriceUSD: 49,
+    annualPriceUSD: 40, // per month ($480/year)
+    monthlyPriceINR: 3999,
+    annualPriceINR: 3199, // per month (₹38,388/year)
+    badge: 'Unlimited Subscription',
+    maxProjects: Infinity,
+    projectBadge: 'Unlimited active projects (No caps)',
+    features: [
+      'Unlimited active projects (No caps)',
+      'Unlimited generations with frontier models',
+      '5 team member seats & shared workspaces',
+      'White-label export & custom branding',
+      'Shared custom API keys pool',
+      'Dedicated account manager & SLA support'
     ]
   }
 };
@@ -63,6 +86,12 @@ export default function CheckoutPage({
   const [selectedPlanId, setSelectedPlanId] = useState(() => {
     return CHECKOUT_PLANS[initialPlanId] ? initialPlanId : 'pro';
   });
+
+  useEffect(() => {
+    if (initialPlanId && CHECKOUT_PLANS[initialPlanId]) {
+      setSelectedPlanId(initialPlanId);
+    }
+  }, [initialPlanId]);
   const [billingCycle, setBillingCycle] = useState(() => {
     return initialBillingCycle === 'monthly' ? 'monthly' : 'annual';
   });
@@ -99,10 +128,22 @@ export default function CheckoutPage({
   // Payment State
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentSuccess, setPaymentSuccess] = useState(null); // { paymentId, orderId, date, amount }
-  const [customRazorpayKey, setCustomRazorpayKey] = useState(() => {
-    return localStorage.getItem('aethercraft_custom_rzp_key') || import.meta.env.VITE_RAZORPAY_KEY_ID || '';
-  });
-  const [showKeyConfig, setShowKeyConfig] = useState(false);
+  
+  // Clean internal Razorpay key resolution from environment variables (never exposed to client UI)
+  const razorpayKey =
+    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_RAZORPAY_KEY_ID) ||
+    (typeof process !== 'undefined' && process.env?.VITE_RAZORPAY_KEY_ID) ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_RAZORPAY_KEY_ID) ||
+    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_RAZORPAY_KEY_ID) ||
+    '';
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('aethercraft_custom_rzp_key');
+      } catch {}
+    }
+  }, []);
 
   const plan = CHECKOUT_PLANS[selectedPlanId] || CHECKOUT_PLANS.pro;
 
@@ -180,7 +221,7 @@ export default function CheckoutPage({
     setIsProcessing(true);
 
     const isScriptLoaded = await loadRazorpayScript();
-    const activeKey = customRazorpayKey.trim();
+    const activeKey = razorpayKey.trim();
 
     // If Razorpay SDK is available and a key is provided:
     if (isScriptLoaded && activeKey && activeKey.startsWith('rzp_')) {
@@ -212,6 +253,11 @@ export default function CheckoutPage({
           },
           handler: function (response) {
             setIsProcessing(false);
+            try {
+              localStorage.setItem('aethercraft_user_plan', selectedPlanId || 'pro');
+            } catch (e) {
+              console.warn('Could not save user plan:', e);
+            }
             setPaymentSuccess({
               paymentId: response.razorpay_payment_id || `pay_${Math.random().toString(36).substring(2, 12)}`,
               orderId: response.razorpay_order_id || `order_${Math.random().toString(36).substring(2, 10)}`,
@@ -246,6 +292,12 @@ export default function CheckoutPage({
       const mockPayId = `pay_${Math.random().toString(36).substring(2, 10)}_${Date.now().toString().slice(-4)}`;
       const mockOrderId = `order_rzp_${Math.random().toString(36).substring(2, 8)}`;
       
+      try {
+        localStorage.setItem('aethercraft_user_plan', selectedPlanId || 'pro');
+      } catch (e) {
+        console.warn('Could not save user plan:', e);
+      }
+
       setPaymentSuccess({
         paymentId: mockPayId,
         orderId: mockOrderId,
@@ -343,15 +395,15 @@ export default function CheckoutPage({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-xs text-zinc-400 bg-zinc-900/90 border border-zinc-800 px-3 py-1.5 rounded-full">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden sm:flex items-center gap-1.5 text-xs text-zinc-400 bg-zinc-900/90 border border-zinc-800 px-3 py-1.5 rounded-full">
               <Lock className="w-3 h-3 text-emerald-400" />
               <span>256-Bit SSL Encrypted</span>
             </div>
             <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg p-0.5 text-xs">
               <button
                 onClick={() => setCurrency('INR')}
-                className={`px-2.5 py-1 rounded-md font-medium transition ${
+                className={`px-2 py-1 sm:px-2.5 rounded-md font-medium transition ${
                   currency === 'INR' ? 'bg-zinc-800 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -359,7 +411,7 @@ export default function CheckoutPage({
               </button>
               <button
                 onClick={() => setCurrency('USD')}
-                className={`px-2.5 py-1 rounded-md font-medium transition ${
+                className={`px-2 py-1 sm:px-2.5 rounded-md font-medium transition ${
                   currency === 'USD' ? 'bg-zinc-800 text-white shadow-xs' : 'text-zinc-400 hover:text-zinc-200'
                 }`}
               >
@@ -377,12 +429,12 @@ export default function CheckoutPage({
           {/* LEFT 7 COLS: Plan selector & Billing info */}
           <div className="lg:col-span-7 space-y-8">
             
-            {/* Step 1: Subscription Cadence */}
+            {/* Step 1: Select Plan & Billing Cadence */}
             <section className="bg-[#0d0f14] border border-zinc-800 rounded-2xl p-6 shadow-sm">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
                 <div>
-                  <h2 className="text-base font-semibold text-white">1. Subscription Cadence</h2>
-                  <p className="text-xs text-zinc-400 font-light mt-0.5">Select monthly or discounted annual billing for Pro Founder.</p>
+                  <h2 className="text-base font-semibold text-white">1. Select Plan & Billing Cadence</h2>
+                  <p className="text-xs text-zinc-400 font-light mt-0.5">Choose your subscription tier and billing cadence.</p>
                 </div>
 
                 {/* Monthly / Annual Toggle */}
@@ -407,7 +459,43 @@ export default function CheckoutPage({
                 </div>
               </div>
 
-              {/* Dedicated Pro Founder Plan Showcase Card */}
+              {/* Plan Switcher Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-5">
+                {Object.values(CHECKOUT_PLANS).map((p) => {
+                  const isSelected = selectedPlanId === p.id;
+                  const price = currency === 'INR'
+                    ? (isAnnual ? p.annualPriceINR : p.monthlyPriceINR)
+                    : (isAnnual ? p.annualPriceUSD : p.monthlyPriceUSD);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedPlanId(p.id)}
+                      className={`p-4 rounded-xl text-left border transition cursor-pointer flex flex-col justify-between ${
+                        isSelected
+                          ? 'bg-[#14171f] border-indigo-500 ring-1 ring-indigo-500/40 shadow-md'
+                          : 'bg-zinc-900/40 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 mb-2">
+                        <span className="text-sm font-bold text-white">{p.name}</span>
+                        <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                          isSelected ? 'bg-indigo-500/20 text-indigo-300 font-semibold' : 'bg-zinc-800 text-zinc-400'
+                        }`}>
+                          {p.projectBadge}
+                        </span>
+                      </div>
+                      <div className="text-lg font-bold text-white mb-1">
+                        {formatMoney(price)}
+                        <span className="text-xs font-normal text-zinc-400"> /mo</span>
+                      </div>
+                      <p className="text-[11px] text-zinc-400 font-light line-clamp-1">{p.tagline}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Detailed Showcase Card for Selected Plan */}
               <div className="p-5 rounded-xl border bg-[#14171f] border-indigo-500/70 ring-1 ring-indigo-500/30 shadow-md">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                   <div>
@@ -433,30 +521,12 @@ export default function CheckoutPage({
 
                 {/* Plan Highlights Grid */}
                 <div className="pt-4 border-t border-zinc-800/80 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-zinc-300">
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    <span className="font-medium text-white">Unlimited generations</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                    <span>Priority synthesis queue & 2x speed</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                    <span>Custom domain publishing with auto-SSL</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                    <span>Multi-turn architectural memory</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                    <span>Unlimited persistent project saves</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Check className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-                    <span>Full React 18 + Vite export suite</span>
-                  </div>
+                  {plan.features.map((feat, i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <Check className={`w-3.5 h-3.5 shrink-0 ${i === 0 ? 'text-emerald-400 font-bold' : 'text-indigo-400'}`} />
+                      <span className={i === 0 ? 'font-medium text-white' : ''}>{feat}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             </section>
@@ -543,7 +613,7 @@ export default function CheckoutPage({
               </div>
             </section>
 
-            {/* Step 3: Payment Gateway Selector */}
+            {/* Step 3: Payment Gateway */}
             <section className="bg-[#0d0f14] border border-zinc-800 rounded-2xl p-6 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-base font-semibold text-white">3. Payment Gateway</h2>
@@ -557,55 +627,30 @@ export default function CheckoutPage({
               </p>
 
               {/* Gateway Banner */}
-              <div className="p-4 rounded-xl bg-gradient-to-r from-indigo-950/40 via-purple-950/20 to-zinc-900/60 border border-indigo-500/30 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center font-bold text-indigo-400">
+              <div className="p-4 rounded-xl border bg-gradient-to-r from-indigo-950/40 via-purple-950/20 to-zinc-900/60 border-indigo-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 bg-indigo-600/20 border border-indigo-500/40 text-indigo-400">
                     RZP
                   </div>
                   <div>
                     <div className="text-xs font-semibold text-white flex items-center gap-2">
-                      <span>Razorpay Payment Suite</span>
-                      <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono">
-                        Ready
+                      <span>Razorpay Secure Gateway</span>
+                      <span className="text-[10px] bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-1.5 py-0.5 rounded font-mono flex items-center gap-1 font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                        PCI-DSS Level 1
                       </span>
                     </div>
-                    <div className="text-[11px] text-zinc-400 font-light">
-                      Supports UPI, Cards (Visa/Mastercard/RuPay/Amex), NetBanking, and EMI.
+                    <div className="text-[11px] text-zinc-400 font-light mt-0.5">
+                      Official Razorpay checkout with instant UPI QR, Cards & NetBanking authorization.
                     </div>
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setShowKeyConfig(!showKeyConfig)}
-                  className="text-[11px] text-zinc-400 hover:text-white underline cursor-pointer"
-                >
-                  {showKeyConfig ? 'Hide Config' : 'API Key Config'}
-                </button>
-              </div>
-
-              {/* Optional Custom Razorpay Key input for immediate testing or linking */}
-              {showKeyConfig && (
-                <div className="mt-4 p-4 rounded-xl bg-zinc-900/80 border border-zinc-800 text-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-zinc-200">Razorpay Key ID (VITE_RAZORPAY_KEY_ID)</span>
-                    <span className="text-[10px] text-zinc-400">Format: rzp_test_... or rzp_live_...</span>
-                  </div>
-                  <input
-                    type="text"
-                    value={customRazorpayKey}
-                    onChange={(e) => {
-                      setCustomRazorpayKey(e.target.value);
-                      localStorage.setItem('aethercraft_custom_rzp_key', e.target.value);
-                    }}
-                    placeholder="rzp_test_1234567890abcdef"
-                    className="w-full bg-zinc-950 border border-zinc-700 rounded-lg px-3 py-2 text-zinc-100 font-mono text-xs placeholder-zinc-600 focus:outline-none focus:border-indigo-500"
-                  />
-                  <p className="text-[10px] text-zinc-500">
-                    Leave blank to test with instant sandbox simulation, or paste your Razorpay Test Key ID to open the official modal.
-                  </p>
+                <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 sm:self-center">
+                  <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>256-Bit SSL</span>
                 </div>
-              )}
+              </div>
             </section>
           </div>
 
@@ -724,16 +769,16 @@ export default function CheckoutPage({
                 type="button"
                 disabled={isProcessing}
                 onClick={handleInitiateRazorpay}
-                className="w-full py-3.5 rounded-xl bg-white hover:bg-zinc-200 text-black font-semibold text-xs tracking-tight transition duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-lg hover:shadow-xl disabled:opacity-60"
+                className="w-full py-3.5 rounded-xl font-semibold text-xs tracking-tight transition duration-200 flex items-center justify-center gap-2 cursor-pointer shadow-lg hover:shadow-xl disabled:opacity-60 bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/30"
               >
                 {isProcessing ? (
                   <>
-                    <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
-                    <span>Connecting to Razorpay...</span>
+                    <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    <span>Opening Razorpay Checkout...</span>
                   </>
                 ) : (
                   <>
-                    <CreditCard className="w-4 h-4 text-black" />
+                    <CreditCard className="w-4 h-4" />
                     <span>Pay {formatMoney(totalDue)} with Razorpay</span>
                   </>
                 )}
@@ -757,3 +802,4 @@ export default function CheckoutPage({
     </div>
   );
 }
+

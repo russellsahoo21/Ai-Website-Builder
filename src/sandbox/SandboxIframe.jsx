@@ -1,3 +1,4 @@
+﻿"use client";
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { buildPreviewDoc } from '../utils/previewBuilder.js';
 
@@ -34,3 +35,4 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
     />
   );
 }
+

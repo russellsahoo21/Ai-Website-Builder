@@ -4,18 +4,23 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "dev:vite": "vite",
+    "build:vite": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@babel/standalone": "^8.0.5",
+    "@clerk/nextjs": "^5.7.5",
     "@clerk/react": "^6.15.2",
     "@clerk/themes": "^2.4.57",
     "@supabase/supabase-js": "^2.116.0",
     "file-saver": "^2.0.5",
     "jszip": "^3.10.1",
     "lucide-react": "^0.475.0",
+    "next": "^14.2.24",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
@@ -26,6 +31,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
     "pg": "^8.23.0",
+    "playwright": "^1.63.0",
     "postcss": "^8.5.2",
     "tailwindcss": "^3.4.17",
     "vite": "^6.1.0"

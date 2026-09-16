@@ -1,3 +1,4 @@
+﻿"use client";
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   FileCode, 
@@ -620,3 +621,4 @@ export default function CodeInspector({ files = {}, onFileUpdate, onFileCreate, 
     </div>
   );
 }
+

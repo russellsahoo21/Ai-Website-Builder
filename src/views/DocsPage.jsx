@@ -1,3 +1,4 @@
+"use client";
 import React, { useState, useEffect } from 'react';
 import {
   BookOpen, Sparkles, Terminal, Code2, Globe, Rocket, Key, Copy, Check,
@@ -332,7 +333,7 @@ npm run dev
             },
             {
               q: "How many websites can I generate for free?",
-              a: "You get 5 free generations on the Starter plan. Upgrading to Pro gives you unlimited generations, priority streaming queues, and access to all frontier AI models."
+              a: "You get 100,000 free AI tokens per month on the Developer Free plan with full access to all AI models without restrictions. Upgrading to Pro gives you unlimited tokens, priority streaming queues, and priority engineering support."
             }
           ]
         }
@@ -658,35 +659,35 @@ export default function DocsPage({ navigateTo }) {
     <div className="min-h-screen bg-[#090a0f] text-zinc-100 flex flex-col selection:bg-indigo-500/30 selection:text-white">
       {/* ─── STICKY HEADER & BREADCRUMBS ──────────────────────────────────────── */}
       <header className="sticky top-0 z-40 w-full border-b border-white/10 bg-[#090a0f]/80 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 h-16 flex items-center justify-between gap-2 sm:gap-4 overflow-hidden">
           {/* Left: Breadcrumbs & Logo */}
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400">
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-zinc-400">
               <span className="flex items-center gap-1 text-indigo-400">
                 <BookOpen className="w-4 h-4" />
-                <span>Docs AI</span>
+                <span className="hidden sm:inline">Docs AI</span>
               </span>
+              <ChevronRight className="w-3.5 h-3.5 text-zinc-600 hidden md:inline" />
+              <span className="text-zinc-400 hidden md:inline">{activeCategory.name}</span>
               <ChevronRight className="w-3.5 h-3.5 text-zinc-600" />
-              <span className="text-zinc-400 hidden sm:inline">{activeCategory.name}</span>
-              <ChevronRight className="w-3.5 h-3.5 text-zinc-600 hidden sm:inline" />
-              <span className="text-zinc-100 truncate max-w-[160px] sm:max-w-xs">{activeSection.title}</span>
+              <span className="text-zinc-100 truncate max-w-[100px] sm:max-w-[140px] md:max-w-xs">{activeSection.title}</span>
             </div>
-            <span className="hidden md:inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+            <span className="hidden lg:inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
               v2.4 Engine
             </span>
           </div>
 
           {/* Center/Right: Omnibar Trigger */}
-          <div className="flex-1 max-w-md mx-2">
+          <div className="flex-1 min-w-0 max-w-xs sm:max-w-md">
             <button
               onClick={() => setIsAiModalOpen(true)}
-              className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-indigo-500/40 text-xs text-zinc-400 transition group shadow-inner"
+              className="w-full flex items-center justify-between px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl bg-white/[0.04] hover:bg-white/[0.08] border border-white/10 hover:border-indigo-500/40 text-xs text-zinc-400 transition group shadow-inner"
             >
-              <div className="flex items-center gap-2">
-                <Search className="w-3.5 h-3.5 text-zinc-500 group-hover:text-indigo-400 transition" />
-                <span className="truncate">Ask Docs AI or search docs...</span>
+              <div className="flex items-center gap-1.5 sm:gap-2 truncate">
+                <Search className="w-3.5 h-3.5 text-zinc-500 group-hover:text-indigo-400 transition shrink-0" />
+                <span className="truncate">Search docs...</span>
               </div>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1 shrink-0">
                 <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-white/10 text-[10px] font-mono text-zinc-300 border border-white/10">
                   <Command className="w-2.5 h-2.5" /> K
                 </kbd>
@@ -701,9 +702,10 @@ export default function DocsPage({ navigateTo }) {
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={() => navigateTo('studio')}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/25"
+              className="flex items-center gap-1.5 px-2.5 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/25"
             >
-              <span>Back to Studio</span>
+              <span className="hidden sm:inline">Back to Studio</span>
+              <span className="sm:hidden">Studio</span>
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
@@ -1333,3 +1335,4 @@ export default function DocsPage({ navigateTo }) {
     </div>
   );
 }
+

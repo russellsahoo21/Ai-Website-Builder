@@ -1,4 +1,4 @@
-﻿# Dependencies
+# Dependencies
 node_modules
 .pnp
 .pnp.js
@@ -10,6 +10,8 @@ node_modules
 dist
 dist-ssr
 *.local
+.next
+out
 
 # Environment variables & API keys
 .env

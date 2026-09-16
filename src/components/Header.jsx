@@ -1,3 +1,4 @@
+﻿"use client";
 import React, { useState } from 'react';
 import { 
   Monitor, 
@@ -176,3 +177,4 @@ export default function Header({
     </header>
   );
 }
+

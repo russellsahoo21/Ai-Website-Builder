@@ -73,12 +73,14 @@ export function parseGeneratedFiles(text) {
 
   const raw = {};
 
-  // Strategy 1: <<<FILE:...>>> delimiters (with or without <<<END_FILE>>>)
-  const fileRegex = /<<<FILE:\s*([^\r\n>]+?)\s*>>>([\s\S]*?)(?:<<<END_FILE>>>|$)/g;
+  // Strategy 1: <<<FILE:...>>> delimiters (bounded by <<<END_FILE>>>, next file start, or EOF)
+  const fileRegex = /<<<FILE:\s*([^\r\n>]+?)\s*>>>([\s\S]*?)(?:<<<END_FILE>>>|(?=<<<FILE:)|\s*$)/g;
   let match;
   while ((match = fileRegex.exec(text)) !== null) {
     const name = normalizeFilePath(cleanFilename(match[1]));
-    const content = match[2].trim();
+    let content = match[2].trim();
+    // Safety: strip any trailing <<<END_FILE markers if caught
+    content = content.replace(/<<<END_FILE>>>/g, '').trim();
     if (name && content.length >= MIN_CONTENT_LENGTH) {
       raw[name] = content;
     }

@@ -1,3 +1,4 @@
+﻿"use client";
 import React from 'react';
 
 const RELEASES = [
@@ -71,3 +72,4 @@ export default function ChangelogPage() {
     </div>
   );
 }
+

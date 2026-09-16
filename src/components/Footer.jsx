@@ -1,3 +1,4 @@
+﻿"use client";
 import React from 'react';
 
 export default function Footer({ navigateTo }) {
@@ -50,3 +51,4 @@ export default function Footer({ navigateTo }) {
     </footer>
   );
 }
+

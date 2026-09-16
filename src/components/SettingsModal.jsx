@@ -1,3 +1,4 @@
+"use client";
 import React, { useState } from 'react';
 import { X, Key, Cpu, CheckCircle2, AlertCircle, ExternalLink, RefreshCw } from 'lucide-react';
 import { AVAILABLE_MODELS, testOpenRouterConnection } from '../services/aiService';
@@ -27,7 +28,8 @@ export default function SettingsModal({
     const isGemini = selectedModel.includes('gemini');
     const isNvidia = selectedModel.includes('nvidia') || selectedModel.includes('deepseek-v4');
     const isGroq = selectedModel.includes('qwen') || selectedModel.includes('groq') || selectedModel.includes('gpt-oss');
-    const hasDefaultKey = isGemini || isNvidia || isGroq;
+    const isXkiro = selectedModel.startsWith('xkiro/');
+    const hasDefaultKey = isGemini || isNvidia || isGroq || isXkiro;
 
     if (!tempKey && !hasDefaultKey) {
       setTestResult({ success: false, msg: 'Please enter an API key first' });
@@ -82,11 +84,11 @@ export default function SettingsModal({
             type="password"
             value={tempKey}
             onChange={(e) => setTempKey(e.target.value)}
-            placeholder="gsk_... or sk-or-... or nvapi-... or AQ...."
+            placeholder="sk-xt-... or gsk_... or sk-or-... or nvapi-... or AQ...."
             className="w-full px-3.5 py-2.5 rounded-xl bg-black/40 border border-white/10 text-white font-mono text-xs focus:border-indigo-500 focus:outline-none transition"
           />
           <p className="text-[11px] text-slate-500 mt-1.5">
-            Groq LPU, Gemini & NVIDIA NIM defaults are pre-configured. Enter a key to override or for OpenRouter models.
+            xKiro, Groq LPU, Gemini & NVIDIA NIM defaults are pre-configured. Enter a key to override or for OpenRouter models.
           </p>
         </div>
 
@@ -110,11 +112,9 @@ export default function SettingsModal({
                   <div className="text-xs font-medium">{model.name}</div>
                   <div className="text-[10px] text-slate-500 font-mono">{model.badge}</div>
                 </div>
-                {model.isFree && (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold uppercase tracking-wider">
-                    Free
-                  </span>
-                )}
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-semibold uppercase tracking-wider">
+                  Unlocked
+                </span>
               </label>
             ))}
           </div>
@@ -167,3 +167,4 @@ export default function SettingsModal({
     </div>
   );
 }
+

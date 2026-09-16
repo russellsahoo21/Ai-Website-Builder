@@ -1,10 +1,12 @@
-import React from 'react';
-import { ArrowRight, FolderKanban } from 'lucide-react';
+"use client";
+import React, { useState } from 'react';
+import { ArrowRight, FolderKanban, Menu, X } from 'lucide-react';
 import { useUser, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 import { dark } from '@clerk/themes';
 
 export default function Navigation({ currentRoute, navigateTo, onOpenProjects, projectCount = 0 }) {
   const { isSignedIn, isLoaded } = useUser();
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
     <nav className="sticky top-0 z-40 bg-[#090a0d]/90 backdrop-blur-md border-b border-zinc-800/80 select-none">
@@ -24,7 +26,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           </button>
 
           {/* Clean Text-Only Links */}
-          <div className="hidden md:flex items-center gap-6 text-xs text-zinc-400">
+          <div className="hidden lg:flex items-center gap-6 text-xs text-zinc-400">
             {isSignedIn && (
               <button
                 onClick={() => navigateTo('dashboard')}
@@ -69,23 +71,39 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             >
               Docs
             </button>
+            <button
+              onClick={() => navigateTo('feedback')}
+              className={`transition hover:text-white ${currentRoute === 'feedback' ? 'text-white font-medium' : ''}`}
+            >
+              Feedback
+            </button>
           </div>
         </div>
 
         {/* Right Clerk Auth & Studio CTAs */}
         <div className="flex items-center gap-3">
           {(!isLoaded || !isSignedIn) ? (
-            <div className="flex items-center gap-2">
-              <SignInButton mode="modal">
-                <button className="text-xs font-medium text-zinc-300 hover:text-white transition px-2.5 py-1.5 rounded-md hover:bg-zinc-800">
-                  Sign In
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="text-xs font-medium text-zinc-300 hover:text-white transition px-2.5 py-1.5 rounded-md hover:bg-zinc-800">
-                  Sign Up
-                </button>
-              </SignUpButton>
+            <div className="flex items-center gap-1.5">
+              <button 
+                onClick={() => navigateTo('login')}
+                className={`text-xs font-medium transition px-2.5 py-1.5 rounded-md cursor-pointer ${
+                  currentRoute === 'login' 
+                    ? 'text-white bg-zinc-800 border border-zinc-700 font-semibold' 
+                    : 'text-zinc-300 hover:text-white hover:bg-zinc-800/80'
+                }`}
+              >
+                Sign In
+              </button>
+              <button 
+                onClick={() => navigateTo('signup')}
+                className={`text-xs font-medium transition px-2.5 py-1.5 rounded-md cursor-pointer ${
+                  currentRoute === 'signup' 
+                    ? 'text-white bg-zinc-800 border border-zinc-700 font-semibold' 
+                    : 'text-zinc-300 hover:text-white hover:bg-zinc-800/80'
+                }`}
+              >
+                Sign Up
+              </button>
             </div>
           ) : (
             <UserButton 
@@ -112,12 +130,13 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           )}
 
           {(!isLoaded || !isSignedIn) ? (
-            <SignUpButton mode="modal">
-              <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-medium tracking-tight transition">
-                <span>Launch Studio</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            </SignUpButton>
+            <button 
+              onClick={() => navigateTo('signup')}
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-medium tracking-tight transition cursor-pointer"
+            >
+              <span>Launch Studio</span>
+              <ArrowRight className="w-3 h-3" />
+            </button>
           ) : (
             <div className="flex items-center gap-2">
               <button
@@ -147,8 +166,90 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
               </button>
             </div>
           )}
+
+          {/* Mobile Menu Toggle Button */}
+          <button
+            onClick={() => setIsMobileMenuOpen(prev => !prev)}
+            className="lg:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition"
+            aria-label="Toggle navigation menu"
+          >
+            {isMobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
         </div>
       </div>
+
+      {/* Mobile Slide-Down Menu */}
+      {isMobileMenuOpen && (
+        <div className="lg:hidden border-t border-zinc-800 bg-[#090a0d] px-6 py-4 space-y-3">
+          {isSignedIn && (
+            <button
+              onClick={() => { navigateTo('dashboard'); setIsMobileMenuOpen(false); }}
+              className={`block w-full text-left py-2 text-sm font-medium transition ${
+                currentRoute === 'dashboard' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              Dashboard ({projectCount} projects)
+            </button>
+          )}
+          <button
+            onClick={() => { navigateTo('templates'); setIsMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 text-sm font-medium transition ${
+              currentRoute === 'templates' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Templates Explorer
+          </button>
+          <button
+            onClick={() => { navigateTo('showcase'); setIsMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 text-sm font-medium transition ${
+              currentRoute === 'showcase' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Community Showcase
+          </button>
+          <button
+            onClick={() => { navigateTo('integrations'); setIsMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 text-sm font-medium transition ${
+              currentRoute === 'integrations' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Integrations
+          </button>
+          <button
+            onClick={() => { navigateTo('pricing'); setIsMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 text-sm font-medium transition ${
+              currentRoute === 'pricing' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Pricing
+          </button>
+          <button
+            onClick={() => { navigateTo('docs'); setIsMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 text-sm font-medium transition ${
+              currentRoute === 'docs' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Documentation
+          </button>
+          <button
+            onClick={() => { navigateTo('changelog'); setIsMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 text-sm font-medium transition ${
+              currentRoute === 'changelog' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Changelog
+          </button>
+          <button
+            onClick={() => { navigateTo('feedback'); setIsMobileMenuOpen(false); }}
+            className={`block w-full text-left py-2 text-sm font-medium transition ${
+              currentRoute === 'feedback' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            Bug Reports & Feedback
+          </button>
+        </div>
+      )}
     </nav>
   );
 }
+

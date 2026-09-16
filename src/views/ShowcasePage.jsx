@@ -1,8 +1,11 @@
+﻿"use client";
 import React from 'react';
 import { Award, ExternalLink, ArrowRight, Heart, Sparkles } from 'lucide-react';
+import { useUser, SignUpButton } from '@clerk/react';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates';
 
 export default function ShowcasePage({ onLoadTemplate, navigateTo }) {
+  const { isSignedIn, isLoaded } = useUser();
   return (
     <div className="min-h-screen bg-[#090a0f] text-slate-100 py-16 px-6 max-w-7xl mx-auto select-none">
       {/* Header */}
@@ -57,13 +60,23 @@ export default function ShowcasePage({ onLoadTemplate, navigateTo }) {
               <div className="text-xs text-slate-400">
                 Created by <span className="text-white font-medium">{tmpl.author}</span>
               </div>
-              <button
-                onClick={() => onLoadTemplate(tmpl)}
-                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/25"
-              >
-                <span>Clone & Edit Project</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+              {(!isLoaded || !isSignedIn) ? (
+                <button
+                  onClick={() => navigateTo('signup')}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/25 cursor-pointer"
+                >
+                  <span>Clone & Edit Project</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => onLoadTemplate(tmpl)}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/25 cursor-pointer"
+                >
+                  <span>Clone & Edit Project</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -75,13 +88,23 @@ export default function ShowcasePage({ onLoadTemplate, navigateTo }) {
         <p className="text-xs text-slate-400 max-w-md mx-auto mb-6">
           Build something amazing in the Studio, click Export, and submit your project to join over 500 featured community apps.
         </p>
-        <button
-          onClick={() => navigateTo('studio')}
-          className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition"
-        >
-          Start Building Your App
-        </button>
+        {(!isLoaded || !isSignedIn) ? (
+          <button
+            onClick={() => navigateTo('signup')}
+            className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition cursor-pointer"
+          >
+            Start Building Your App
+          </button>
+        ) : (
+          <button
+            onClick={() => navigateTo('studio')}
+            className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition cursor-pointer"
+          >
+            Start Building Your App
+          </button>
+        )}
       </div>
     </div>
   );
 }
+

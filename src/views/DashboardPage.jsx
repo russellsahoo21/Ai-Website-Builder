@@ -1,3 +1,4 @@
+"use client";
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Eye,
@@ -52,7 +53,8 @@ import {
   LogOut,
   User,
   UserCheck,
-  Upload
+  Upload,
+  Bug
 } from 'lucide-react';
 import { useUser, useClerk } from '@clerk/react';
 import { dark } from '@clerk/themes';
@@ -62,8 +64,11 @@ import { downloadProjectZip } from '../utils/zipExporter.js';
 import { buildPreviewDoc } from '../utils/previewBuilder.js';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates.js';
 import { AVAILABLE_MODELS, testOpenRouterConnection } from '../services/aiService.js';
+import { getTokenUsage } from '../services/tokenService.js';
+import FeedbackView from './FeedbackView.jsx';
 
 export const MAX_FREE_PROJECTS = 5;
+export const MAX_PRO_PROJECTS = 50;
 
 const PROMPT_SUGGESTIONS = [
   { label: 'Fintech Expense Tracker', prompt: 'Fintech Expense Tracker with analytics, CRUD transactions, category filters, and localStorage' },
@@ -224,14 +229,16 @@ export default function DashboardPage({
   const handleSignOut = async () => {
     setIsAccountMenuOpen(false);
     try {
-      await clerk.signOut();
+      if (clerk?.signOut) {
+        await clerk.signOut({ redirectUrl: '/' });
+      }
       if (typeof navigateTo === 'function') {
         navigateTo('landing');
       } else {
         window.location.href = '/';
       }
     } catch (err) {
-      console.error('Clerk signOut error:', err);
+      console.warn('Clerk signOut notice:', err);
       window.location.href = '/';
     }
   };
@@ -275,9 +282,26 @@ export default function DashboardPage({
   const [previewModalProject, setPreviewModalProject] = useState(null);
   const [previewDeviceMode, setPreviewDeviceMode] = useState('desktop');
   
+  // Real-time Monthly Token Usage Tracking (100,000 cap)
+  const [tokenUsage, setTokenUsage] = useState(() => getTokenUsage());
+  useEffect(() => {
+    const handleTokenUpdate = () => setTokenUsage(getTokenUsage());
+    window.addEventListener('tokenUsageUpdated', handleTokenUpdate);
+    return () => window.removeEventListener('tokenUsageUpdated', handleTokenUpdate);
+  }, []);
+  
   // Persistent Sidebar View State
-  const [activeSidebarTab, setActiveSidebarTab] = useState('projects'); 
-  // 'projects' | 'blueprints' | 'components' | 'storage' | 'deployments' | 'activity' | 'showcase' | 'settings' | 'docs'
+  const [activeSidebarTab, setActiveSidebarTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const urlTab = new URLSearchParams(window.location.search).get('tab');
+      if (urlTab && ['projects', 'blueprints', 'components', 'storage', 'deployments', 'activity', 'showcase', 'settings', 'docs', 'feedback'].includes(urlTab)) {
+        return urlTab;
+      }
+    }
+    return 'projects';
+  });
+  // 'projects' | 'blueprints' | 'components' | 'storage' | 'deployments' | 'activity' | 'showcase' | 'settings' | 'docs' | 'feedback'
+
 
   // Settings State for inline settings view
   const [tempKey, setTempKey] = useState(apiKey);
@@ -315,16 +339,30 @@ export default function DashboardPage({
         if (!Array.isArray(imported)) throw new Error("Invalid format: expected array of projects");
         const existing = getAllProjects();
         const existingIds = new Set(existing.map(p => p.id));
+        const storedPlan = localStorage.getItem('aethercraft_user_plan') || 'free';
+        const isUnlimited = storedPlan === 'enterprise' || storedPlan === 'studio' || storedPlan === 'unlimited';
+        const isPro = storedPlan === 'pro';
+        const userMax = isUnlimited ? Infinity : isPro ? MAX_PRO_PROJECTS : MAX_FREE_PROJECTS;
         let count = 0;
         for (const p of imported) {
           if (p.id && !existingIds.has(p.id)) {
+            if (existing.length >= userMax) {
+              if (isPro) {
+                alert(`Pro plan limit reached (${MAX_PRO_PROJECTS} projects). Upgrade to Studio Unlimited for unlimited projects.`);
+              } else {
+                alert(`Free tier limit reached (${MAX_FREE_PROJECTS} projects). Cannot import additional projects without upgrading to Pro.`);
+              }
+              break;
+            }
             existing.unshift(p);
             count++;
           }
         }
-        localStorage.setItem('aethercraft_saved_projects', JSON.stringify(existing));
-        alert(`Imported ${count} new projects successfully!`);
-        window.location.reload();
+        if (count > 0) {
+          localStorage.setItem('aethercraft_saved_projects', JSON.stringify(existing));
+          alert(`Imported ${count} new projects successfully!`);
+          window.location.reload();
+        }
       } catch (err) {
         alert(`Failed to import JSON: ${err.message}`);
       }
@@ -332,10 +370,17 @@ export default function DashboardPage({
     reader.readAsText(file);
   };
 
-  // Quota calculations
+  // Quota calculations & plan state
+  const userPlan = typeof localStorage !== 'undefined' ? (localStorage.getItem('aethercraft_user_plan') || 'free') : 'free';
+  const isUnlimitedUser = userPlan === 'enterprise' || userPlan === 'studio' || userPlan === 'unlimited';
+  const isProUser = userPlan === 'pro';
+  const isPaidUser = isUnlimitedUser || isProUser;
+  const maxProjects = isUnlimitedUser ? Infinity : isProUser ? MAX_PRO_PROJECTS : MAX_FREE_PROJECTS;
   const projectCount = projects.length;
-  const isAtProjectLimit = projectCount >= MAX_FREE_PROJECTS;
-  const quotaPercent = Math.min(Math.round((projectCount / MAX_FREE_PROJECTS) * 100), 100);
+  const isAtProjectLimit = !isUnlimitedUser && projectCount >= maxProjects;
+  const quotaPercent = isUnlimitedUser
+    ? Math.min(100, projectCount * 2)
+    : Math.min(Math.round((projectCount / maxProjects) * 100), 100);
 
   // Total files count across all projects
   const totalFilesCount = useMemo(() => {
@@ -380,7 +425,13 @@ export default function DashboardPage({
     e.preventDefault();
     if (!quickPrompt.trim()) return;
     if (isAtProjectLimit) {
-      alert(`Free tier limit reached (${MAX_FREE_PROJECTS}/${MAX_FREE_PROJECTS} projects). Please delete or export an existing project to synthesize a new one.`);
+      if (isProUser) {
+        alert(`Pro plan limit reached (${projectCount}/${MAX_PRO_PROJECTS} projects). Upgrade to Studio Unlimited for unlimited projects or delete an existing project.`);
+        navigateTo('checkout', { plan: 'enterprise' });
+      } else {
+        alert(`Free tier limit reached (${projectCount}/${MAX_FREE_PROJECTS} projects). Upgrade to Pro for up to 50 projects or delete an existing project.`);
+        navigateTo('checkout', { plan: 'pro' });
+      }
       return;
     }
     onLaunchWithPrompt(quickPrompt.trim());
@@ -390,7 +441,13 @@ export default function DashboardPage({
   // Handle Create Project with limit check
   const handleCreateProjectSafe = () => {
     if (isAtProjectLimit) {
-      alert(`Free tier limit reached (${MAX_FREE_PROJECTS}/${MAX_FREE_PROJECTS} projects). Delete an existing project to create a new one.`);
+      if (isProUser) {
+        alert(`Pro plan limit reached (${projectCount}/${MAX_PRO_PROJECTS} projects). Upgrade to Studio Unlimited for unlimited projects or delete an existing project.`);
+        navigateTo('checkout', { plan: 'enterprise' });
+      } else {
+        alert(`Free tier limit reached (${projectCount}/${MAX_FREE_PROJECTS} projects). Upgrade to Pro for up to 50 projects or delete an existing project.`);
+        navigateTo('checkout', { plan: 'pro' });
+      }
       return;
     }
     onCreateNewProject('New Project', '');
@@ -451,7 +508,7 @@ export default function DashboardPage({
     {
       group: 'WORKSPACE',
       items: [
-        { id: 'projects', label: 'My Projects', icon: FolderKanban, badge: `${projectCount}/${MAX_FREE_PROJECTS}` },
+        { id: 'projects', label: 'My Projects', icon: FolderKanban, badge: isUnlimitedUser ? `${projectCount}` : `${projectCount}/${maxProjects}` },
         { id: 'blueprints', label: 'Blueprints', icon: Layers, badge: `${STARTER_TEMPLATES.length}` },
         { id: 'components', label: 'Component Library', icon: Boxes, badge: '4' },
       ]
@@ -466,9 +523,10 @@ export default function DashboardPage({
       ]
     },
     {
-      group: 'CONFIGURATION',
+      group: 'CONFIGURATION & SUPPORT',
       items: [
         { id: 'settings', label: 'Engine Settings', icon: Sliders },
+        { id: 'feedback', label: 'Bug Reports & Feedback', icon: Bug },
         { id: 'docs', label: 'Documentation', icon: BookOpen },
       ]
     }
@@ -494,8 +552,14 @@ export default function DashboardPage({
                 <div className="min-w-0">
                   <div className="font-bold text-xs tracking-tight text-white flex items-center gap-1.5 truncate">
                     <span>AetherCraft</span>
-                    <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-[9px] text-zinc-300 font-mono border border-zinc-700/80">
-                      FREE
+                    <span className={`px-1.5 py-0.2 rounded text-[9px] font-mono border ${
+                      isUnlimitedUser
+                        ? 'bg-indigo-950/80 text-indigo-400 border-indigo-800/60 font-bold'
+                        : isProUser 
+                          ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60 font-bold' 
+                          : 'bg-zinc-800 text-zinc-300 border-zinc-700/80'
+                    }`}>
+                      {isUnlimitedUser ? 'STUDIO' : isProUser ? 'PRO' : 'FREE'}
                     </span>
                   </div>
                   <div className="text-[10px] text-zinc-500 truncate">
@@ -538,12 +602,7 @@ export default function DashboardPage({
               title="Launch Code Studio"
             >
               <Code2 className="w-4 h-4 text-cyan-400 group-hover:scale-110 transition-transform shrink-0" />
-              {!isSidebarCollapsed && (
-                <div className="flex items-center justify-between w-full min-w-0">
-                  <span className="truncate">Open Code Studio</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-zinc-500 group-hover:text-zinc-300 group-hover:translate-x-0.5 transition-all shrink-0" />
-                </div>
-              )}
+              {!isSidebarCollapsed && <span>Launch Code Studio</span>}
             </button>
           </div>
 
@@ -609,53 +668,216 @@ export default function DashboardPage({
 
         {/* Sidebar Footer: Real Quota Tracker + User Profile + Toggle */}
         <div className={`relative p-3 border-t border-zinc-800/80 bg-[#080a0e] shrink-0 ${isSidebarCollapsed ? 'space-y-2 flex flex-col items-center' : 'space-y-3'}`}>
-          {/* Free Tier Project Quota */}
-          {!isSidebarCollapsed ? (
-            <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800/90">
-              <div className="flex items-center justify-between text-xs mb-1.5">
-                <span className="font-semibold text-zinc-300 text-[11px]">Free Tier Usage</span>
-                <span className={`font-mono text-[11px] font-bold ${
-                  isAtProjectLimit ? 'text-amber-400' : 'text-zinc-400'
-                }`}>
-                  {projectCount} / {MAX_FREE_PROJECTS}
-                </span>
+          {/* Project Quota Box */}
+          {!isPaidUser ? (
+            !isSidebarCollapsed ? (
+              <>
+                <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800/90">
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="font-semibold text-zinc-300 text-[11px]">Free Tier Usage</span>
+                    <span className={`font-mono text-[11px] font-bold ${
+                      isAtProjectLimit ? 'text-amber-400' : 'text-zinc-400'
+                    }`}>
+                      {projectCount} / {MAX_FREE_PROJECTS}
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden mb-1.5">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        isAtProjectLimit 
+                          ? 'bg-amber-500' 
+                          : 'bg-zinc-200'
+                      }`}
+                      style={{ width: `${quotaPercent}%` }}
+                    />
+                  </div>
+                  <div className="text-[10px] text-zinc-500 flex items-center justify-between">
+                    <span className={isAtProjectLimit ? 'text-amber-400 font-medium' : ''}>
+                      {projectCount > MAX_FREE_PROJECTS
+                        ? 'Quota exceeded (0 slots)'
+                        : isAtProjectLimit
+                          ? 'Limit reached (0 slots)'
+                          : `${MAX_FREE_PROJECTS - projectCount} slots available`}
+                    </span>
+                    <button 
+                      onClick={() => navigateTo('checkout', { plan: 'pro' })}
+                      className="text-amber-400 hover:text-amber-300 font-semibold text-[10px] flex items-center gap-1 cursor-pointer transition"
+                    >
+                      <Sparkles className="w-2.5 h-2.5" />
+                      <span>Upgrade</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Monthly AI Token Quota Tracker (100,000 Cap) */}
+                <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800/90 mt-2">
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="font-semibold text-zinc-300 text-[11px] flex items-center gap-1">
+                      <Zap className="w-3 h-3 text-cyan-400" />
+                      <span>AI Tokens / Mo</span>
+                    </span>
+                    <span className="font-mono text-[11px] font-bold text-cyan-300">
+                      {tokenUsage.used.toLocaleString()} / 100k
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden mb-1.5">
+                    <div 
+                      className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-cyan-500 to-indigo-500"
+                      style={{ width: `${Math.min(100, (tokenUsage.used / 100000) * 100)}%` }}
+                    />
+                  </div>
+                  <div className="text-[10px] text-zinc-400 flex items-center justify-between">
+                    <span>{tokenUsage.remaining.toLocaleString()} left</span>
+                    <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50 font-mono">
+                      ALL MODELS
+                    </span>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <div 
+                className="w-10 py-1.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 flex flex-col items-center justify-center mx-auto cursor-pointer hover:border-zinc-700 transition"
+                onClick={() => setActiveSidebarTab('settings')}
+                title={`Free tier usage: ${projectCount}/${MAX_FREE_PROJECTS} projects`}
+              >
+                <span className={`text-[10px] font-mono font-bold leading-none ${isAtProjectLimit ? 'text-amber-400' : 'text-zinc-300'}`}>{projectCount}/{MAX_FREE_PROJECTS}</span>
+                <div className="w-6 h-1 rounded-full bg-zinc-800 mt-1 overflow-hidden">
+                  <div className={`h-full ${isAtProjectLimit ? 'bg-amber-500' : 'bg-zinc-200'}`} style={{ width: `${quotaPercent}%` }} />
+                </div>
               </div>
-              <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden mb-1.5">
-                <div 
-                  className={`h-full rounded-full transition-all duration-500 ${
-                    isAtProjectLimit 
-                      ? 'bg-amber-500' 
-                      : 'bg-zinc-200'
-                  }`}
-                  style={{ width: `${quotaPercent}%` }}
-                />
+            )
+          ) : isProUser ? (
+            !isSidebarCollapsed ? (
+              <div className="p-2.5 rounded-xl bg-indigo-950/20 border border-indigo-900/40">
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className="font-semibold text-zinc-200 text-[11px] flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-amber-400" />
+                    <span>Pro Account</span>
+                  </span>
+                  <span className={`font-mono text-[11px] font-bold ${
+                    isAtProjectLimit ? 'text-amber-400' : 'text-indigo-300'
+                  }`}>
+                    {projectCount} / {MAX_PRO_PROJECTS}
+                  </span>
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden mb-1.5">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      isAtProjectLimit ? 'bg-amber-500' : 'bg-indigo-400'
+                    }`}
+                    style={{ width: `${quotaPercent}%` }}
+                  />
+                </div>
+                <div className="text-[10px] text-zinc-400 flex items-center justify-between">
+                  <span className={isAtProjectLimit ? 'text-amber-400 font-medium' : ''}>
+                    {isAtProjectLimit
+                      ? 'Limit reached (50/50)'
+                      : `${MAX_PRO_PROJECTS - projectCount} slots left`}
+                  </span>
+                  <button 
+                    onClick={() => navigateTo('checkout', { plan: 'enterprise' })}
+                    className="text-indigo-400 hover:text-indigo-300 font-semibold text-[10px] flex items-center gap-1 cursor-pointer transition"
+                    title="Upgrade to Studio Unlimited for infinite projects"
+                  >
+                    <Sparkles className="w-2.5 h-2.5" />
+                    <span>Unlimited</span>
+                  </button>
+                </div>
               </div>
-              <div className="text-[10px] text-zinc-500 flex items-center justify-between">
-                <span>{MAX_FREE_PROJECTS - projectCount} slots available</span>
-                <button 
-                  onClick={() => navigateTo('checkout', { plan: 'pro' })}
-                  className="text-amber-400 hover:text-amber-300 font-semibold text-[10px] flex items-center gap-1 cursor-pointer transition"
-                >
-                  <Sparkles className="w-2.5 h-2.5" />
-                  <span>Upgrade</span>
-                </button>
+            ) : (
+              <div 
+                className="w-10 py-1.5 rounded-lg bg-indigo-950/30 border border-indigo-800/40 flex flex-col items-center justify-center mx-auto cursor-pointer"
+                onClick={() => setActiveSidebarTab('settings')}
+                title={`Pro Plan: ${projectCount}/${MAX_PRO_PROJECTS} projects`}
+              >
+                <span className={`text-[10px] font-mono font-bold leading-none ${isAtProjectLimit ? 'text-amber-400' : 'text-indigo-300'}`}>{projectCount}/{MAX_PRO_PROJECTS}</span>
+                <div className="w-6 h-1 rounded-full bg-zinc-800 mt-1 overflow-hidden">
+                  <div className={`h-full ${isAtProjectLimit ? 'bg-amber-500' : 'bg-indigo-400'}`} style={{ width: `${quotaPercent}%` }} />
+                </div>
               </div>
-            </div>
+            )
           ) : (
-            <div 
-              className="w-10 py-1.5 rounded-lg bg-zinc-900/70 border border-zinc-800/80 flex flex-col items-center justify-center mx-auto cursor-pointer hover:border-zinc-700 transition"
-              onClick={() => setActiveSidebarTab('settings')}
-              title={`Free tier usage: ${projectCount}/${MAX_FREE_PROJECTS} projects`}
-            >
-              <span className="text-[10px] font-mono text-zinc-300 font-bold leading-none">{projectCount}/{MAX_FREE_PROJECTS}</span>
-              <div className="w-6 h-1 rounded-full bg-zinc-800 mt-1 overflow-hidden">
-                <div className={`h-full ${isAtProjectLimit ? 'bg-amber-500' : 'bg-zinc-200'}`} style={{ width: `${quotaPercent}%` }} />
+            !isSidebarCollapsed ? (
+              <div className="p-2.5 rounded-xl bg-purple-950/20 border border-purple-900/40">
+                <div className="flex items-center justify-between text-xs text-purple-300 mb-1 font-medium">
+                  <span className="flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    <span className="text-[11px] font-semibold text-zinc-200">Studio Unlimited</span>
+                  </span>
+                  <span className="font-mono text-[9px] bg-purple-500/10 text-purple-400 px-1.5 py-0.5 rounded border border-purple-500/20 font-bold">UNLIMITED</span>
+                </div>
+                <div className="text-[10px] text-zinc-400 flex items-center justify-between">
+                  <span>{projectCount} projects active</span>
+                  <span className="text-purple-300 font-mono text-[10px]">No Caps</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div 
+                className="w-10 py-1.5 rounded-lg bg-purple-950/30 border border-purple-800/40 flex flex-col items-center justify-center mx-auto cursor-pointer"
+                title="Studio Unlimited: Infinite Projects"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                <span className="text-[8px] text-purple-300 mt-0.5 font-mono">STUDIO</span>
+              </div>
+            )
           )}
 
           {/* User Profile Footer with Account Menu */}
           <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center w-full' : 'justify-between'} pt-1 relative`}>
+            {/* Clickable Account Drawer Trigger */}
+            {!isSidebarCollapsed ? (
+              <div 
+                onClick={() => setIsAccountMenuOpen(prev => !prev)}
+                className="flex items-center gap-2 min-w-0 cursor-pointer p-1 -ml-1 rounded-xl hover:bg-white/[0.04] transition flex-1"
+                title="Click for Account & Sign Out"
+              >
+                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white shrink-0 overflow-hidden shadow">
+                  {user?.imageUrl ? (
+                    <img src={user.imageUrl} alt={userDisplayName} className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{userDisplayName[0].toUpperCase()}</span>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-semibold text-white truncate">
+                    {userDisplayName}
+                  </div>
+                  <div className="text-[10px] text-zinc-500 truncate">
+                    {isUnlimitedUser ? 'Studio Unlimited' : isProUser ? 'Pro Plan' : 'Personal Plan'}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div 
+                onClick={() => setIsAccountMenuOpen(prev => !prev)}
+                className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white mx-auto shadow shrink-0 cursor-pointer hover:ring-2 hover:ring-zinc-700 transition overflow-hidden"
+                title={`${userDisplayName} - Account & Sign Out`}
+              >
+                {user?.imageUrl ? (
+                  <img src={user.imageUrl} alt={userDisplayName} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{userDisplayName[0].toUpperCase()}</span>
+                )}
+              </div>
+            )}
+
+            {!isSidebarCollapsed && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsAccountMenuOpen(prev => !prev);
+                }}
+                className={`p-1.5 rounded-lg transition cursor-pointer ${
+                  isAccountMenuOpen
+                    ? 'text-white bg-zinc-800 ring-1 ring-zinc-600'
+                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
+                }`}
+                title="Account & Sign Out Menu"
+              >
+                <Settings className="w-3.5 h-3.5" />
+              </button>
+            )}
+
             {/* Floating Account & Sign Out Popup Menu */}
             {isAccountMenuOpen && (
               <div
@@ -683,7 +905,9 @@ export default function DashboardPage({
                   </div>
                   <div className="mt-2 flex items-center justify-between text-[10px] text-zinc-400 border-t border-white/5 pt-1.5 font-mono">
                     <span className="text-zinc-500">Plan</span>
-                    <span className="text-amber-400 font-semibold">Free Tier • {projectCount}/{MAX_FREE_PROJECTS}</span>
+                    <span className={isUnlimitedUser ? "text-purple-400 font-semibold" : isProUser ? "text-indigo-400 font-semibold" : "text-amber-400 font-semibold"}>
+                      {isUnlimitedUser ? 'Studio Unlimited • No Caps' : isProUser ? `Pro Plan • ${projectCount}/${MAX_PRO_PROJECTS}` : `Free Tier • ${projectCount}/${MAX_FREE_PROJECTS}`}
+                    </span>
                   </div>
                 </div>
 
@@ -737,6 +961,23 @@ export default function DashboardPage({
                     </div>
                   </button>
 
+                  {/* 4. Bug Reports & Feedback */}
+                  <button
+                    onClick={() => {
+                      setIsAccountMenuOpen(false);
+                      setActiveSidebarTab('feedback');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-xl text-zinc-300 hover:text-white hover:bg-white/[0.06] transition text-left group cursor-pointer"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-rose-500/10 border border-rose-500/20 flex items-center justify-center text-rose-400 group-hover:scale-105 transition">
+                      <Bug className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="font-semibold block text-zinc-200 group-hover:text-white">Report Bug / Feedback</span>
+                      <span className="text-[10px] text-zinc-500 block truncate">Submit ticket or diagnostics</span>
+                    </div>
+                  </button>
+
                   <div className="my-1.5 border-t border-white/5" />
 
                   {/* 4. SIGN OUT BUTTON */}
@@ -754,59 +995,6 @@ export default function DashboardPage({
                   </button>
                 </div>
               </div>
-            )}
-
-            {!isSidebarCollapsed ? (
-              <div 
-                onClick={() => setIsAccountMenuOpen(prev => !prev)}
-                className="flex items-center gap-2 min-w-0 cursor-pointer p-1 -ml-1 rounded-xl hover:bg-white/[0.04] transition flex-1"
-                title="Click for Account & Sign Out"
-              >
-                <div className="w-7 h-7 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white shrink-0 overflow-hidden shadow">
-                  {user?.imageUrl ? (
-                    <img src={user.imageUrl} alt={userDisplayName} className="w-full h-full object-cover" />
-                  ) : (
-                    <span>{userDisplayName[0].toUpperCase()}</span>
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs font-semibold text-white truncate">
-                    {userDisplayName}
-                  </div>
-                  <div className="text-[10px] text-zinc-500 truncate">
-                    Personal Plan
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div 
-                onClick={() => setIsAccountMenuOpen(prev => !prev)}
-                className="w-8 h-8 rounded-full bg-gradient-to-tr from-amber-600 to-amber-400 flex items-center justify-center font-bold text-xs text-white mx-auto shadow shrink-0 cursor-pointer hover:ring-2 hover:ring-zinc-700 transition overflow-hidden"
-                title={`${userDisplayName} - Account & Sign Out`}
-              >
-                {user?.imageUrl ? (
-                  <img src={user.imageUrl} alt={userDisplayName} className="w-full h-full object-cover" />
-                ) : (
-                  <span>{userDisplayName[0].toUpperCase()}</span>
-                )}
-              </div>
-            )}
-
-            {!isSidebarCollapsed && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setIsAccountMenuOpen(prev => !prev);
-                }}
-                className={`p-1.5 rounded-lg transition cursor-pointer ${
-                  isAccountMenuOpen
-                    ? 'text-white bg-zinc-800 ring-1 ring-zinc-600'
-                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800'
-                }`}
-                title="Account & Sign Out Menu"
-              >
-                <Settings className="w-3.5 h-3.5" />
-              </button>
             )}
           </div>
 
@@ -839,10 +1027,11 @@ export default function DashboardPage({
                 {activeSidebarTab === 'showcase' && 'Community Showcase'}
                 {activeSidebarTab === 'settings' && 'Engine & API Settings'}
                 {activeSidebarTab === 'docs' && 'Developer Documentation'}
+                {activeSidebarTab === 'feedback' && 'Feedbacks & Bug Reports'}
               </span>
               <span className="text-zinc-600">/</span>
               <span className="text-zinc-500">
-                {activeSidebarTab === 'projects' ? `${projects.length} Total` : 'Workspace Management'}
+                {activeSidebarTab === 'projects' ? `${projects.length} Total` : activeSidebarTab === 'feedback' ? 'User Reports & Diagnostics' : 'Workspace Management'}
               </span>
             </div>
           </div>
@@ -850,15 +1039,24 @@ export default function DashboardPage({
           <div className="flex items-center gap-3">
             <button
               onClick={handleCreateProjectSafe}
-              disabled={isAtProjectLimit}
-              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition ${
+              className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
                 isAtProjectLimit
-                  ? 'bg-zinc-800 text-zinc-500 cursor-not-allowed border border-zinc-700/40'
+                  ? 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 shadow-sm'
                   : 'bg-zinc-100 hover:bg-white text-zinc-950 shadow-sm active:scale-95'
               }`}
+              title={isAtProjectLimit ? (isProUser ? "Pro plan limit reached (50/50) — Click to upgrade to Studio" : "Free tier limit reached — Click to upgrade") : "Create New Project"}
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New Project</span>
+              {isAtProjectLimit ? (
+                <>
+                  <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Upgrade to Add</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>New Project</span>
+                </>
+              )}
             </button>
 
             <button
@@ -941,11 +1139,22 @@ export default function DashboardPage({
                     <FolderKanban className="w-4 h-4 text-zinc-500" />
                   </div>
                   <div className="text-xl font-bold text-white font-mono">
-                    {projectCount} <span className="text-xs text-zinc-500 font-normal">/ {MAX_FREE_PROJECTS} Max</span>
+                    {projectCount} <span className="text-xs text-zinc-500 font-normal">{isUnlimitedUser ? '/ Unlimited' : `/ ${maxProjects} Max`}</span>
                   </div>
                   <div className="w-full h-1.5 rounded-full bg-zinc-800 mt-2.5 overflow-hidden">
-                    <div className="h-full bg-zinc-300 rounded-full" style={{ width: `${quotaPercent}%` }} />
+                    <div className={`h-full transition-all duration-500 ${isAtProjectLimit ? 'bg-amber-500' : 'bg-zinc-300'} rounded-full`} style={{ width: `${quotaPercent}%` }} />
                   </div>
+                  {isAtProjectLimit && (
+                    <div className="text-[10px] text-amber-400 mt-2 flex items-center justify-between font-medium">
+                      <span>{projectCount > maxProjects ? 'Quota exceeded' : 'Limit reached'}</span>
+                      <button 
+                        onClick={() => navigateTo('checkout', { plan: isProUser ? 'enterprise' : 'pro' })} 
+                        className="underline hover:text-amber-300 font-semibold cursor-pointer"
+                      >
+                        {isProUser ? 'Upgrade to Studio' : 'Upgrade to Pro'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="p-4 rounded-xl bg-[#0c0e14] border border-zinc-800/80">
@@ -1163,10 +1372,24 @@ export default function DashboardPage({
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (isAtProjectLimit) {
+                                  if (isProUser) {
+                                    alert(`Pro plan limit reached (${projectCount}/${MAX_PRO_PROJECTS} projects). Upgrade to Studio Unlimited for unlimited projects or delete an existing project.`);
+                                    navigateTo('checkout', { plan: 'enterprise' });
+                                  } else {
+                                    alert(`Free tier limit reached (${projectCount}/${MAX_FREE_PROJECTS} projects). Upgrade to Pro for up to 50 projects or delete an existing project.`);
+                                    navigateTo('checkout', { plan: 'pro' });
+                                  }
+                                  return;
+                                }
                                 onDuplicateProject(project.id);
                               }}
-                              className="p-1 rounded hover:bg-zinc-800 hover:text-zinc-200"
-                              title="Duplicate Project"
+                              className={`p-1 rounded transition ${
+                                isAtProjectLimit 
+                                  ? 'hover:bg-amber-950/40 text-amber-500/70 hover:text-amber-400' 
+                                  : 'hover:bg-zinc-800 hover:text-zinc-200'
+                              }`}
+                              title={isAtProjectLimit ? "Limit reached — Upgrade to duplicate" : "Duplicate Project"}
                             >
                               <Copy className="w-3.5 h-3.5" />
                             </button>
@@ -1724,15 +1947,9 @@ npm run dev
                       >
                         <div className="flex items-center justify-between mb-1">
                           <span className="text-xs font-bold text-white">{m.name}</span>
-                          {m.isFree ? (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800/60">
-                              FREE
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-zinc-800 text-zinc-400 border border-zinc-700">
-                              PAID
-                            </span>
-                          )}
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-mono bg-emerald-950 text-emerald-400 border border-emerald-800/60 font-semibold">
+                            UNRESTRICTED
+                          </span>
                         </div>
                         <p className="text-[10px] text-zinc-400 font-mono">{m.badge}</p>
                       </div>
@@ -1798,6 +2015,11 @@ npm run dev
                 </div>
               </div>
             </div>
+          )}
+
+          {/* TAB 10: FEEDBACK & BUG REPORTS */}
+          {activeSidebarTab === 'feedback' && (
+            <FeedbackView userEmail={userEmail} userName={userDisplayName} />
           )}
         </div>
       
@@ -1902,3 +2124,4 @@ npm run dev
     </div>
   );
 }
+

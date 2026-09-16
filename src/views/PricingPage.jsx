@@ -1,3 +1,4 @@
+"use client";
 import React, { useState } from 'react';
 import { CheckCircle2, Tag, HelpCircle, ArrowRight } from 'lucide-react';
 
@@ -12,10 +13,11 @@ export default function PricingPage({ navigateTo }) {
       period: "forever",
       desc: "For prototyping personal ideas.",
       features: [
-        "5 free generations",
+        "5 active projects",
+        "100,000 monthly AI tokens",
+        "All AI models available (No tier restrictions)",
         "In-memory live sandbox",
         "1-Click ZIP export",
-        "Unlimited Free OpenRouter Models",
         "Community Discord support"
       ],
       cta: "Get Started Free",
@@ -28,30 +30,32 @@ export default function PricingPage({ navigateTo }) {
       period: "per month",
       desc: "For indie makers shipping commercial products.",
       features: [
-        "Unlimited generations",
-        "Priority synthesis speed",
+        "Up to 50 active projects",
+        "Unlimited monthly AI tokens",
+        "Priority synthesis queue & speed",
+        "All frontier models included",
         "Custom domain publishing",
         "Multi-turn architectural memory",
-        "Unlimited persistent project saves",
         "Priority engineering support"
       ],
       cta: "Start Pro Plan",
       featured: true
     },
     {
-      id: "team",
-      name: "Team Workspace",
+      id: "enterprise",
+      name: "Studio Unlimited",
       price: billingCycle === 'annual' ? "$40" : "$49",
       period: "per month",
-      desc: "For agencies and digital teams.",
+      desc: "For agencies, studios, and high-velocity creators.",
       features: [
-        "5 team member seats",
-        "Shared workspace sync",
-        "White-label export options",
+        "Unlimited active projects (No caps)",
+        "Unlimited tokens with zero throttling",
+        "5 team member seats & shared sync",
+        "White-label export & custom branding",
         "Shared custom API keys pool",
         "Dedicated account manager & SLA"
       ],
-      cta: "Contact Team Sales",
+      cta: "Start Unlimited Plan",
       featured: false
     }
   ];
@@ -137,7 +141,7 @@ export default function PricingPage({ navigateTo }) {
                 } else if (p.id === 'pro') {
                   navigateTo('checkout', { plan: 'pro', cycle: billingCycle });
                 } else {
-                  window.location.href = 'mailto:sales@aethercraft.io?subject=Inquiry%20about%20Team%20Workspace%20Plan';
+                  navigateTo('checkout', { plan: 'enterprise', cycle: billingCycle });
                 }
               }}
               className={`w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer ${
@@ -160,29 +164,35 @@ export default function PricingPage({ navigateTo }) {
             <thead>
               <tr className="border-b border-white/10 text-slate-400">
                 <th className="pb-4 font-semibold">Capability</th>
-                <th className="pb-4 font-semibold text-center">Starter</th>
-                <th className="pb-4 font-semibold text-center text-indigo-400">Pro</th>
-                <th className="pb-4 font-semibold text-center">Team</th>
+                <th className="pb-4 font-semibold text-center">Free Starter</th>
+                <th className="pb-4 font-semibold text-center text-indigo-400">Pro Founder</th>
+                <th className="pb-4 font-semibold text-center text-emerald-400">Studio Unlimited</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5 text-slate-300">
               <tr>
-                <td className="py-3 font-medium">Free OpenRouter Models</td>
-                <td className="py-3 text-center text-emerald-400 font-bold">Unlimited</td>
-                <td className="py-3 text-center text-emerald-400 font-bold">Unlimited</td>
-                <td className="py-3 text-center text-emerald-400 font-bold">Unlimited</td>
+                <td className="py-3 font-medium text-white">Active Projects Quota</td>
+                <td className="py-3 text-center text-zinc-400 font-mono">5 Projects</td>
+                <td className="py-3 text-center text-indigo-400 font-bold font-mono">50 Projects</td>
+                <td className="py-3 text-center text-emerald-400 font-bold font-mono">Unlimited</td>
               </tr>
               <tr>
-                <td className="py-3 font-medium">NVIDIA Nemotron 3 Ultra (1M Context)</td>
-                <td className="py-3 text-center text-emerald-400">Included</td>
-                <td className="py-3 text-center text-emerald-400">Included</td>
-                <td className="py-3 text-center text-emerald-400">Included</td>
+                <td className="py-3 font-medium">Monthly AI Token Quota</td>
+                <td className="py-3 text-center text-cyan-400 font-bold font-mono">100k Tokens</td>
+                <td className="py-3 text-center text-indigo-400 font-bold font-mono">Unlimited</td>
+                <td className="py-3 text-center text-emerald-400 font-bold font-mono">Unlimited</td>
               </tr>
               <tr>
-                <td className="py-3 font-medium">Frontier Models (Claude 3.5 / GPT-4o)</td>
-                <td className="py-3 text-center text-slate-600">—</td>
-                <td className="py-3 text-center text-indigo-400 font-bold">Yes</td>
-                <td className="py-3 text-center text-indigo-400 font-bold">Yes</td>
+                <td className="py-3 font-medium">Model Access & Frontier Models</td>
+                <td className="py-3 text-center text-emerald-400 font-semibold">Unrestricted (All Models)</td>
+                <td className="py-3 text-center text-indigo-400 font-bold">Unrestricted (Priority)</td>
+                <td className="py-3 text-center text-emerald-400 font-bold">Unrestricted (VIP)</td>
+              </tr>
+              <tr>
+                <td className="py-3 font-medium">Token Optimizer Engine</td>
+                <td className="py-3 text-center text-emerald-400">Included (~35% Saved)</td>
+                <td className="py-3 text-center text-indigo-400 font-bold">Included (~35% Saved)</td>
+                <td className="py-3 text-center text-emerald-400 font-bold">Included (~35% Saved)</td>
               </tr>
               <tr>
                 <td className="py-3 font-medium">Live Sandboxed Preview</td>
@@ -209,3 +219,4 @@ export default function PricingPage({ navigateTo }) {
     </div>
   );
 }
+

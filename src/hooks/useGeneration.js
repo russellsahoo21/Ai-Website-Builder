@@ -37,6 +37,7 @@ export function useGeneration({
 }) {
   const abortControllerRef = useRef(null);
   const autoFixCountRef = useRef(0);
+  const lastAutoFixTimeRef = useRef(0);
   const isGeneratingRef = useRef(false);
 
   const [telemetry, setTelemetry] = useState({
@@ -86,15 +87,27 @@ export function useGeneration({
     const isProviderWithDefault = selectedModelRef.current?.includes('gemini') || selectedModelRef.current?.includes('nvidia') || selectedModelRef.current?.includes('qwen') || selectedModelRef.current?.includes('groq') || selectedModelRef.current?.includes('gpt-oss');
     const hasKey = Boolean(apiKeyRef.current || isProviderWithDefault || import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_GROQ_API_KEY);
     if (!hasKey || isGeneratingRef.current) return;
+
+    // Minimum 4-second cooldown between auto-repair attempts
+    const now = Date.now();
+    if (!isManual && (now - lastAutoFixTimeRef.current < 4000)) {
+      return;
+    }
+    lastAutoFixTimeRef.current = now;
+
     if (!isManual && autoFixCountRef.current >= MAX_AUTO_FIX_ATTEMPTS) {
-      // Exhausted retries — show single friendly suggestion, no error text
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'ai',
-          content: 'The app needs a different approach. Try simplifying your prompt, or switch to a higher-quality model in Settings.',
-        },
-      ]);
+      // Exhausted retries — show single friendly suggestion at most once
+      setMessages(prev => {
+        const alreadyPosted = prev.some(m => m.content?.includes('needs a different approach'));
+        if (alreadyPosted) return prev;
+        return [
+          ...prev,
+          {
+            role: 'ai',
+            content: 'The app needs a different approach. Try simplifying your prompt, or switch to a higher-quality model in Settings.',
+          },
+        ];
+      });
       return;
     }
 
@@ -143,10 +156,8 @@ export function useGeneration({
             parsedFilesCount: fileMatch ? fileMatch.length : 1,
           });
         },
-        onFileParsed: (parsedResult) => {
-          const { merged, needsConversion } = mergeFiles(parsedResult, filesRef.current);
-          if (needsConversion) { conversionNeeded = true; return; }
-          if (Object.keys(merged).length > 0) setFiles(merged);
+        onFileParsed: () => {
+          // Do not commit incomplete files to state during streaming to prevent syntax errors
         },
         onComplete: (fullText, finalResult) => {
           let { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
@@ -241,10 +252,8 @@ export function useGeneration({
             parsedFilesCount: fileMatch ? fileMatch.length : 1,
           });
         },
-        onFileParsed: (parsedResult) => {
-          const { merged, needsConversion } = mergeFiles(parsedResult, filesRef.current);
-          if (needsConversion) { conversionNeeded = true; return; }
-          if (Object.keys(merged).length > 0) setFiles(merged);
+        onFileParsed: () => {
+          // Do not commit incomplete files to state during streaming to prevent syntax errors
         },
         onComplete: (fullText, finalResult) => {
           let { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);

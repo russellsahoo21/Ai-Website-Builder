@@ -45,6 +45,7 @@ export function deriveProjectName(prompt) {
 
 // Get all saved projects from local cache
 export function getAllProjects() {
+  if (typeof window === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) {
@@ -102,11 +103,13 @@ export function getProjectById(id) {
 
 // Get the active project ID
 export function getActiveProjectId() {
+  if (typeof window === 'undefined') return null;
   return localStorage.getItem(ACTIVE_ID_KEY) || null;
 }
 
 // Set active project ID
 export function setActiveProjectId(id) {
+  if (typeof window === 'undefined') return;
   if (id) {
     localStorage.setItem(ACTIVE_ID_KEY, id);
   } else {
@@ -116,6 +119,7 @@ export function setActiveProjectId(id) {
 
 // Save or update a project (Local-first + Background Cloud Sync)
 export function saveProject(project, userId = currentUserId) {
+  if (typeof window === 'undefined') return null;
   if (!project || !project.id) return null;
   try {
     const all = getAllProjects();
@@ -150,6 +154,7 @@ export function saveProject(project, userId = currentUserId) {
 
 // Create a new project
 export function createNewProject({ name, prompt = '', files = {}, messages = [] } = {}, userId = currentUserId) {
+  if (typeof window === 'undefined') return null;
   const id = `proj_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
   const finalName = name || deriveProjectName(prompt) || 'New Project';
   const structuredFiles = ensureStandardReactStructure(files || {});
@@ -182,6 +187,7 @@ export function createNewProject({ name, prompt = '', files = {}, messages = [] 
 
 // Delete project
 export function deleteProject(id, userId = currentUserId) {
+  if (typeof window === 'undefined') return [];
   try {
     const all = getAllProjects();
     const filtered = all.filter(p => p.id !== id);
@@ -206,6 +212,7 @@ export function deleteProject(id, userId = currentUserId) {
 
 // Duplicate an existing project
 export function duplicateProject(id, userId = currentUserId) {
+  if (typeof window === 'undefined') return null;
   const orig = getProjectById(id);
   if (!orig) return null;
   const newProj = {
@@ -231,6 +238,7 @@ export function duplicateProject(id, userId = currentUserId) {
 
 // Synchronize all user projects with Supabase Cloud DB
 export async function syncProjectsWithCloud(userId) {
+  if (typeof window === 'undefined') return [];
   if (!userId || !isCloudDbConfigured()) return getAllProjects();
 
   try {

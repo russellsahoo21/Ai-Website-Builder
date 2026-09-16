@@ -1,10 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  /* Scale default UI proportion by 110% so it feels spacious and readable at 100% browser zoom */
   html {
+    scroll-behavior: smooth;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
+
+  /* Scale default UI proportion by 110% so it feels spacious and readable at 100% browser zoom */
+  html, body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 17.6px; /* 16px * 1.1 = 17.6px (110% baseline scale) */
   }
 
@@ -279,6 +292,127 @@
   color: #ffffff !important;
 }
 
+/* Card & CardBox Reset for Unified Card Wrapper */
+.cl-cardBox {
+  overflow: visible !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  width: 100% !important;
+}
+
+.cl-card {
+  margin: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  width: 100% !important;
+}
+
+/* Clerk Social Login Buttons (GitHub, GitLab, Google) */
+.cl-socialButtons {
+  display: flex !important;
+  flex-direction: row !important;
+  gap: 0.5rem !important;
+  width: 100% !important;
+}
+
+.cl-socialButtonsIconButton {
+  flex: 1 1 0% !important;
+  width: auto !important;
+  min-width: 0 !important;
+  height: 2.25rem !important;
+  padding: 0 0.5rem !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.45rem !important;
+  border-radius: 0.625rem !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.cl-socialButtonsIconButton:hover {
+  background: rgba(255, 255, 255, 0.09) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-1px) !important;
+}
+
+.cl-socialButtonsIconButton__github::after {
+  content: 'GitHub';
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #f4f4f5;
+  white-space: nowrap;
+}
+
+.cl-socialButtonsIconButton__gitlab::after {
+  content: 'GitLab';
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #f4f4f5;
+  white-space: nowrap;
+}
+
+.cl-socialButtonsIconButton__google::after {
+  content: 'Google';
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #f4f4f5;
+  white-space: nowrap;
+}
+
+.cl-socialButtonsBlockButton {
+  height: 2.25rem !important;
+  border-radius: 0.625rem !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  font-size: 0.75rem !important;
+  font-weight: 500 !important;
+  color: #f4f4f5 !important;
+  transition: all 0.2s ease !important;
+}
+
+.cl-socialButtonsBlockButton:hover {
+  background: rgba(255, 255, 255, 0.09) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Compact Clerk Footer & Secured By Badge */
+.cl-footer {
+  padding-top: 0.625rem !important;
+  padding-bottom: 0 !important;
+  margin-top: 0.625rem !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+  background: transparent !important;
+}
+
+.cl-footerAction {
+  padding: 0.25rem 0 !important;
+}
+
+.cl-footerActionLink {
+  color: #818cf8 !important;
+  font-weight: 600 !important;
+}
+
+.cl-footerActionLink:hover {
+  color: #a5b4fc !important;
+  text-decoration: underline !important;
+}
+
+.cl-footerItem {
+  font-size: 0.6875rem !important;
+  color: #71717a !important;
+  margin-top: 0.25rem !important;
+  opacity: 0.75 !important;
+}
+
 /* Catch-all safety: ensure NO text in Clerk modals falls back to dark color */
 .cl-userProfile-root p,
 .cl-userProfile-root span,
@@ -290,4 +424,6 @@
 .cl-userProfile-root h4 {
   color: inherit;
 }
+
+
 

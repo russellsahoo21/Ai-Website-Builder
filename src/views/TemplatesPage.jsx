@@ -1,10 +1,13 @@
+﻿"use client";
 import React, { useState } from 'react';
 import { Layers, Search, Star, ArrowRight, Sparkles, Filter, ExternalLink } from 'lucide-react';
+import { useUser, SignUpButton } from '@clerk/react';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates';
 
 const CATEGORIES = ["All", "Gaming & Media", "React Web Apps", "SaaS & AI", "Real Estate", "E-Commerce", "Dashboards"];
 
 export default function TemplatesPage({ onLoadTemplate, navigateTo }) {
+  const { isSignedIn, isLoaded } = useUser();
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -115,13 +118,23 @@ export default function TemplatesPage({ onLoadTemplate, navigateTo }) {
                   <span>By {tmpl.author}</span>
                 )}
               </div>
-              <button
-                onClick={() => onLoadTemplate(tmpl)}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-xs font-semibold text-black transition shadow-sm"
-              >
-                <span>Open in Studio</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
+              {(!isLoaded || !isSignedIn) ? (
+                <button
+                  onClick={() => navigateTo('signup')}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-xs font-semibold text-black transition shadow-sm cursor-pointer"
+                >
+                  <span>Open in Studio</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => onLoadTemplate(tmpl)}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white hover:bg-zinc-200 text-xs font-semibold text-black transition shadow-sm cursor-pointer"
+                >
+                  <span>Open in Studio</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -129,3 +142,4 @@ export default function TemplatesPage({ onLoadTemplate, navigateTo }) {
     </div>
   );
 }
+

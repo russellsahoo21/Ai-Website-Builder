@@ -1,15 +1,19 @@
+"use client";
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Navigation from './components/Navigation';
 import Footer from './components/Footer';
-import LandingPage from './pages/LandingPage';
-import DashboardPage from './pages/DashboardPage';
-import TemplatesPage from './pages/TemplatesPage';
-import ShowcasePage from './pages/ShowcasePage';
-import IntegrationsPage from './pages/IntegrationsPage';
-import ChangelogPage from './pages/ChangelogPage';
-import PricingPage from './pages/PricingPage';
-import DocsPage from './pages/DocsPage';
-import CheckoutPage from './pages/CheckoutPage';
+import LandingPage from './views/LandingPage';
+import DashboardPage from './views/DashboardPage';
+import TemplatesPage from './views/TemplatesPage';
+import ShowcasePage from './views/ShowcasePage';
+import IntegrationsPage from './views/IntegrationsPage';
+import ChangelogPage from './views/ChangelogPage';
+import PricingPage from './views/PricingPage';
+import DocsPage from './views/DocsPage';
+import CheckoutPage from './views/CheckoutPage';
+import AuthPage from './views/AuthPage';
+import FeedbackView from './views/FeedbackView';
 import Header from './components/Header';
 import ChatPanel from './components/ChatPanel';
 import PreviewPanel from './components/PreviewPanel';
@@ -37,19 +41,30 @@ import {
   syncProjectsWithCloud
 } from './services/projectService';
 import { syncUserProfile } from './services/dbService';
+import { getSession } from './services/authService';
 
-function getRouteFromHash() {
+function getAppRoute() {
+  const path = window.location.pathname.replace(/^\//, '').split('?')[0].split('/')[0];
+  const valid = ['templates', 'showcase', 'integrations', 'changelog', 'pricing', 'docs', 'feedback', 'studio', 'dashboard', 'checkout', 'login', 'signup'];
+  if (valid.includes(path)) return path;
+
   const hash = window.location.hash.replace('#/', '').replace('#', '').split('?')[0];
-  const valid = ['templates', 'showcase', 'integrations', 'changelog', 'pricing', 'docs', 'studio', 'dashboard', 'checkout'];
-  return valid.includes(hash) ? hash : 'landing';
+  if (valid.includes(hash)) return hash;
+  return 'landing';
 }
 
-export default function App() {
-  const { isSignedIn, isLoaded, user } = useUser();
+export default function App({ initialRoute }) {
+  const { isSignedIn: clerkSignedIn, isLoaded, user: clerkUser } = useUser();
+  const guestSession = typeof localStorage !== 'undefined' ? getSession() : null;
+  const isSignedIn = clerkSignedIn || Boolean(guestSession);
+  const user = clerkUser || guestSession;
   const clerk = useClerk();
 
   // — Routing & Checkout state —
-  const [currentRoute, setCurrentRoute] = useState(getRouteFromHash);
+  const [currentRoute, setCurrentRoute] = useState(() => {
+    if (initialRoute) return initialRoute;
+    return getAppRoute();
+  });
   const [checkoutPlan, setCheckoutPlan] = useState('pro');
   const [checkoutCycle, setCheckoutCycle] = useState('annual');
   const [returnRoute, setReturnRoute] = useState('landing');
@@ -62,12 +77,14 @@ export default function App() {
 
   // — Configuration —
   const [apiKey, setApiKey] = useState(() =>
-    localStorage.getItem('aethercraft_openrouter_key') ||
+    (typeof window !== 'undefined' ? localStorage.getItem('aethercraft_openrouter_key') : null) ||
     import.meta.env.VITE_OPENROUTER_API_KEY || ''
   );
   const [selectedModel, setSelectedModel] = useState(() => {
-    const saved = localStorage.getItem('aethercraft_model');
-    if (saved && AVAILABLE_MODELS.some(m => m.id === saved)) return saved;
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('aethercraft_model');
+      if (saved && AVAILABLE_MODELS.some(m => m.id === saved)) return saved;
+    }
     return import.meta.env.VITE_DEFAULT_MODEL || DEFAULT_MODEL;
   });
 
@@ -172,29 +189,48 @@ export default function App() {
 
   // — Sandbox postMessage listener —
   useSandboxMessages({
+    isGenerating,
     onRuntimeError: useCallback((msg) => executeAutoFix(msg, false), [executeAutoFix]),
     onManualFix: useCallback((msg) => executeAutoFix(msg, true), [executeAutoFix]),
   });
 
   // — Route sync —
   useEffect(() => {
-    const onHash = () => {
-      const target = getRouteFromHash();
+    // If user lands on #/login or #/signup, cleanly normalize to /login or /signup
+    const initialHash = window.location.hash.replace('#/', '').replace('#', '').split('?')[0];
+    if (initialHash === 'login' || initialHash === 'signup') {
+      window.history.replaceState({}, '', `/${initialHash}`);
+      window.location.hash = '';
+      setCurrentRoute(initialHash);
+    }
+
+    const onLocationChange = () => {
+      const target = getAppRoute();
       if ((target === 'studio' || target === 'dashboard') && isLoaded && !isSignedIn) {
-        clerk.openSignIn();
-        setCurrentRoute('landing');
-        window.location.hash = '';
+        navigateTo('login');
       } else {
         setCurrentRoute(target);
       }
     };
-    window.addEventListener('hashchange', onHash);
-    return () => window.removeEventListener('hashchange', onHash);
-  }, [isSignedIn, isLoaded, clerk]);
+
+    window.addEventListener('hashchange', onLocationChange);
+    window.addEventListener('popstate', onLocationChange);
+    return () => {
+      window.removeEventListener('hashchange', onLocationChange);
+      window.removeEventListener('popstate', onLocationChange);
+    };
+  }, [isSignedIn, isLoaded]);
+
+  // If user signs in while on login or signup view, redirect directly to dashboard
+  useEffect(() => {
+    if (isLoaded && isSignedIn && (currentRoute === 'login' || currentRoute === 'signup')) {
+      navigateTo('dashboard');
+    }
+  }, [isSignedIn, isLoaded, currentRoute]);
 
   const navigateTo = (route, params = {}) => {
     if ((route === 'studio' || route === 'dashboard') && !isSignedIn) { 
-      clerk.openSignIn(); 
+      navigateTo('login'); 
       return; 
     }
     if (route === 'checkout') {
@@ -203,7 +239,16 @@ export default function App() {
     if (params.plan) setCheckoutPlan(params.plan);
     if (params.cycle) setCheckoutCycle(params.cycle);
     setCurrentRoute(route);
-    window.location.hash = route === 'landing' ? '' : `/${route}`;
+
+    if (typeof window !== 'undefined') {
+      const targetPath = route === 'landing' ? '/' : `/${route}`;
+      if (window.location.pathname !== targetPath) {
+        window.history.pushState({}, '', targetPath);
+      }
+      if (window.location.hash) {
+        window.location.hash = '';
+      }
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -216,7 +261,32 @@ export default function App() {
     setRefreshTrigger(prev => prev + 1);
   };
 
+  const MAX_FREE_PROJECTS = 5;
+  const MAX_PRO_PROJECTS = 50;
+
+  const checkProjectQuota = () => {
+    const userPlan = localStorage.getItem('aethercraft_user_plan') || 'free';
+    if (userPlan === 'enterprise' || userPlan === 'studio' || userPlan === 'unlimited') {
+      return true;
+    }
+    if (userPlan === 'pro') {
+      if (projects.length >= MAX_PRO_PROJECTS) {
+        alert(`Pro plan limit reached (${projects.length}/${MAX_PRO_PROJECTS} projects). Upgrade to Studio Unlimited for unlimited projects or delete an existing project.`);
+        navigateTo('checkout', { plan: 'enterprise' });
+        return false;
+      }
+      return true;
+    }
+    if (projects.length >= MAX_FREE_PROJECTS) {
+      alert(`Free tier limit reached (${projects.length}/${MAX_FREE_PROJECTS} projects). Upgrade to Pro for up to 50 projects or delete an existing project.`);
+      navigateTo('checkout', { plan: 'pro' });
+      return false;
+    }
+    return true;
+  };
+
   const handleCreateNewProject = (initialName = 'New Project', initialPrompt = '') => {
+    if (!checkProjectQuota()) return null;
     const newProj = createNewProject({
       name: initialName,
       prompt: initialPrompt,
@@ -245,6 +315,7 @@ export default function App() {
   };
 
   const handleDuplicateProject = (id) => {
+    if (!checkProjectQuota()) return;
     const cloned = duplicateProject(id);
     if (cloned) {
       setProjects(getAllProjects());
@@ -280,6 +351,7 @@ export default function App() {
   }, [apiKey, handleSendMessage, projects, activeProjectId]);
 
   const handleLoadTemplate = (template) => {
+    if (!checkProjectQuota()) return;
     handleCancelGeneration();
     if (autoFixCountRef) autoFixCountRef.current = 0;
     const newProj = createNewProject({
@@ -293,13 +365,15 @@ export default function App() {
     setActiveProjectId(newProj.id);
     setFiles(newProj.files || template.files || {});
     setMessages([{ role: 'ai', content: `Template loaded: "${template.name}". Inspect code or submit instructions to refine.` }]);
-    if (!isSignedIn) { clerk.openSignIn(); return; }
+    if (!isSignedIn) { navigateTo('login'); return; }
     navigateTo('studio');
     setRefreshTrigger(prev => prev + 1);
   };
 
   const handleClearWorkspace = () => {
-    handleCreateNewProject('New Project', '');
+    setFiles({});
+    setMessages([]);
+    setRefreshTrigger(prev => prev + 1);
   };
 
   const handleFileUpdate = (filename, newContent) => {
@@ -357,7 +431,8 @@ export default function App() {
   };
 
   const handleLaunchWithPrompt = (promptText, enginePrompt = null) => {
-    if (!isSignedIn) { clerk.openSignIn(); return; }
+    if (!isSignedIn) { navigateTo('login'); return; }
+    if (!checkProjectQuota()) return;
     const newProj = createNewProject({
       name: deriveProjectName(promptText),
       prompt: promptText,
@@ -403,6 +478,14 @@ export default function App() {
             onClearWorkspace={handleClearWorkspace}
             isGenerating={isGenerating}
             onCancelGeneration={handleCancelGeneration}
+            selectedModel={selectedModel}
+            onSelectModel={(modelId) => {
+              setSelectedModel(modelId);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('aethercraft_model', modelId);
+              }
+            }}
+            availableModels={AVAILABLE_MODELS}
           />
 
           <div className="flex-1 h-full overflow-hidden relative">
@@ -415,7 +498,6 @@ export default function App() {
                 telemetry={telemetry}
                 onCancel={handleCancelGeneration}
                 promptText={messages.slice().reverse().find(m => m.role === 'user')?.content || ''}
-                onSandboxError={(msg) => executeAutoFix(msg, false)}
               />
             ) : (
               <CodeInspector
@@ -452,8 +534,8 @@ export default function App() {
             navigateTo('studio');
           }}
           onCreateNewProject={(name, prompt) => {
-            handleCreateNewProject(name, prompt);
-            navigateTo('studio');
+            const p = handleCreateNewProject(name, prompt);
+            if (p) navigateTo('studio');
           }}
           onDeleteProject={handleDeleteProject}
           onDuplicateProject={handleDuplicateProject}
@@ -492,7 +574,7 @@ export default function App() {
         projectCount={projects.length}
       />
 
-      <main className="flex-1">
+      <main className="flex-1 flex flex-col">
         {currentRoute === 'landing' && (
           <LandingPage 
             navigateTo={navigateTo} 
@@ -510,6 +592,14 @@ export default function App() {
         {currentRoute === 'changelog' && <ChangelogPage />}
         {currentRoute === 'pricing' && <PricingPage navigateTo={navigateTo} />}
         {currentRoute === 'docs' && <DocsPage navigateTo={navigateTo} />}
+        {currentRoute === 'feedback' && (
+          <div className="py-8">
+            <FeedbackView
+              userEmail={user?.primaryEmailAddress?.emailAddress || ''}
+              userName={user?.fullName || user?.firstName || ''}
+            />
+          </div>
+        )}
         {currentRoute === 'checkout' && (
           <CheckoutPage 
             initialPlanId={checkoutPlan}
@@ -518,9 +608,14 @@ export default function App() {
             navigateTo={navigateTo}
           />
         )}
+        {(currentRoute === 'login' || currentRoute === 'signup') && (
+          <AuthPage mode={currentRoute} navigateTo={navigateTo} />
+        )}
       </main>
 
-      <Footer navigateTo={navigateTo} />
+      {currentRoute !== 'login' && currentRoute !== 'signup' && (
+        <Footer navigateTo={navigateTo} />
+      )}
 
       <SettingsModal
         isOpen={isSettingsOpen}

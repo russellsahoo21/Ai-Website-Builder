@@ -1,3 +1,4 @@
+﻿"use client";
 import React, { useRef, useEffect } from 'react';
 import SatisfyingLoader from './SatisfyingLoader';
 import SandboxIframe from '../sandbox/SandboxIframe';
@@ -56,3 +57,4 @@ export default function PreviewPanel({ files, viewport, keyTrigger, isGenerating
     </div>
   );
 }
+

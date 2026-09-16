@@ -1,3 +1,4 @@
+"use client";
 import React, { useState, useEffect } from 'react';
 import { 
   ArrowRight, 
@@ -99,7 +100,7 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
 
         <h1 className="text-5xl sm:text-7xl lg:text-8xl font-bold tracking-tight text-white leading-[1.08] mb-6">
           Build fullstack software <br className="hidden sm:inline" />
-          <span className="text-zinc-400 font-normal">at the speed of thought</span>
+          <span className="text-zinc-400 font-bold">at the speed of thought</span>
         </h1>
 
         <p className="text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto mb-12 leading-relaxed font-light">
@@ -124,15 +125,14 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
             </div>
 
             {(!isLoaded || !isSignedIn) ? (
-              <SignUpButton mode="modal">
-                <button
-                  type="button"
-                  className="w-full sm:w-auto px-6 py-3 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-semibold tracking-tight transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
-                >
-                  <span>Build Application</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </SignUpButton>
+              <button
+                type="button"
+                onClick={() => navigateTo('signup')}
+                className="w-full sm:w-auto px-6 py-3 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-semibold tracking-tight transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+              >
+                <span>Build Application</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             ) : (
               <button
                 type="submit"
@@ -150,14 +150,14 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
             {TYPEWRITER_PHRASES.slice(0, 3).map((phrase, i) => {
               const cleaned = phrase.replace('...', '');
               return (!isLoaded || !isSignedIn) ? (
-                <SignUpButton key={i} mode="modal">
-                  <button
-                    type="button"
-                    className="px-3 py-1.5 rounded-md bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition text-xs font-mono cursor-pointer"
-                  >
-                    {cleaned}
-                  </button>
-                </SignUpButton>
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => navigateTo('signup')}
+                  className="px-3 py-1.5 rounded-md bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 text-zinc-400 hover:text-zinc-200 transition text-xs font-mono cursor-pointer"
+                >
+                  {cleaned}
+                </button>
               ) : (
                 <button
                   key={i}
@@ -189,12 +189,13 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
             </div>
 
             {(!isLoaded || !isSignedIn) ? (
-              <SignUpButton mode="modal">
-                <button className="text-xs font-medium text-zinc-400 hover:text-white flex items-center gap-1.5 transition cursor-pointer">
-                  <span>Open Studio</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </SignUpButton>
+              <button 
+                onClick={() => navigateTo('signup')}
+                className="text-xs font-medium text-zinc-400 hover:text-white flex items-center gap-1.5 transition cursor-pointer"
+              >
+                <span>Open Studio</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             ) : (
               <button
                 onClick={() => navigateTo('studio')}
@@ -223,11 +224,12 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
               </div>
 
               {(!isLoaded || !isSignedIn) ? (
-                <SignUpButton mode="modal">
-                  <button className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition mt-4 cursor-pointer">
-                    Inspect Project in Studio
-                  </button>
-                </SignUpButton>
+                <button 
+                  onClick={() => navigateTo('signup')}
+                  className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition mt-4 cursor-pointer"
+                >
+                  Inspect Project in Studio
+                </button>
               ) : (
                 <button
                   onClick={() => navigateTo('studio')}
@@ -350,11 +352,12 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
               </div>
 
               {(!isLoaded || !isSignedIn) ? (
-                <SignUpButton mode="modal">
-                  <button className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition text-center cursor-pointer">
-                    Open in Studio
-                  </button>
-                </SignUpButton>
+                <button 
+                  onClick={() => navigateTo('signup')}
+                  className="w-full py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-xs font-medium text-white transition text-center cursor-pointer"
+                >
+                  Open in Studio
+                </button>
               ) : (
                 <button
                   onClick={() => onLoadTemplate(tmpl)}
@@ -420,7 +423,15 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
                 <ul className="space-y-3 text-xs text-slate-300">
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                    <span>5 free generations</span>
+                    <span>5 active projects</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>100,000 monthly AI tokens</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>All AI models available (No tier restrictions)</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
@@ -432,10 +443,6 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                    <span>Unlimited Free OpenRouter Models</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
                     <span>Community Discord support</span>
                   </li>
                 </ul>
@@ -443,13 +450,14 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
             </div>
 
             {(!isLoaded || !isSignedIn) ? (
-              <SignUpButton mode="modal">
-                <button className="w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white">
-                  Get Started Free
-                </button>
-              </SignUpButton>
+              <button 
+                onClick={() => navigateTo('signup')}
+                className="w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white"
+              >
+                Get Started Free
+              </button>
             ) : (
-              <button
+              <button 
                 onClick={() => navigateTo('studio')}
                 className="w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white"
               >
@@ -476,11 +484,19 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
                 <ul className="space-y-3 text-xs text-slate-300">
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
-                    <span>Unlimited generations</span>
+                    <span>Up to 50 active projects</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
-                    <span>Priority synthesis speed</span>
+                    <span>Unlimited monthly AI tokens</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
+                    <span>Priority synthesis queue & speed</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
+                    <span>All frontier models included</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
@@ -489,10 +505,6 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
                     <span>Multi-turn architectural memory</span>
-                  </li>
-                  <li className="flex items-center gap-2.5">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
-                    <span>Unlimited persistent project saves</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-400" />
@@ -510,25 +522,29 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
             </button>
           </div>
 
-          {/* Team Workspace */}
+          {/* Studio Unlimited */}
           <div className="rounded-3xl p-8 flex flex-col justify-between transition duration-300 bg-[#0e121a] border border-white/5 shadow-xl">
             <div>
-              <div className="text-sm font-bold text-slate-300 mb-1">Team Workspace</div>
+              <div className="text-sm font-bold text-slate-300 mb-1">Studio Unlimited</div>
               <div className="text-4xl font-black text-white mb-1">
                 {billingCycle === 'annual' ? '$40' : '$49'} <span className="text-xs font-normal text-slate-400">/per month</span>
               </div>
-              <p className="text-xs text-slate-400 mb-8 leading-relaxed font-light">For agencies and digital teams.</p>
+              <p className="text-xs text-slate-400 mb-8 leading-relaxed font-light">For agencies, studios, and high-velocity creators.</p>
 
               <div className="border-t border-white/5 pt-6 mb-8">
                 <div className="text-xs uppercase font-bold text-slate-500 tracking-wider mb-4">Included Features:</div>
                 <ul className="space-y-3 text-xs text-slate-300">
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                    <span>5 team member seats</span>
+                    <span>Unlimited active projects (No caps)</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
-                    <span>Shared workspace sync</span>
+                    <span>Unlimited generations with frontier models</span>
+                  </li>
+                  <li className="flex items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
+                    <span>5 team member seats & shared sync</span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-400" />
@@ -546,12 +562,12 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
               </div>
             </div>
 
-            <a
-              href="mailto:sales@aethercraft.io?subject=Inquiry%20about%20Team%20Workspace%20Plan"
+            <button
+              onClick={() => navigateTo('checkout', { plan: 'enterprise', cycle: billingCycle })}
               className="w-full py-3.5 rounded-xl font-bold text-xs uppercase tracking-wider transition cursor-pointer bg-zinc-800 hover:bg-zinc-700 text-white text-center block"
             >
-              Contact Team Sales
-            </a>
+              Start Unlimited Plan
+            </button>
           </div>
         </div>
       </section>
@@ -581,3 +597,4 @@ export default function LandingPage({ navigateTo, onLaunchWithPrompt, onLoadTemp
     </div>
   );
 }
+
