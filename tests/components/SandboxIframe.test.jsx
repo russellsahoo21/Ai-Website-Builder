@@ -158,4 +158,104 @@ describe('SandboxIframe Component Behavior', () => {
     expect(iframes[1].className).toContain('opacity-0');
     expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Runtime crash in B' }));
   });
+
+  it('Deduplicates duplicate SANDBOX_MOUNT_SUCCESS messages for the same preview', () => {
+    const onMountSuccess = vi.fn();
+    const validFiles = {
+      'src/App.jsx': 'export default function App() { return <div>V1</div>; }'
+    };
+    let stagedPreviewId = null;
+    const { container } = render(
+      <SandboxIframe
+        files={validFiles}
+        onMountSuccess={onMountSuccess}
+        onPreviewStaged={({ previewId }) => { stagedPreviewId = previewId; }}
+      />
+    );
+    const iframes = container.querySelectorAll('iframe');
+
+    // First MOUNT_SUCCESS
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'SANDBOX_MOUNT_SUCCESS', previewId: stagedPreviewId },
+          source: iframes[0].contentWindow
+        })
+      );
+    });
+    expect(onMountSuccess).toHaveBeenCalledTimes(1);
+
+    // Duplicate MOUNT_SUCCESS for the same previewId (e.g. from DOMContentLoaded + load)
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'SANDBOX_MOUNT_SUCCESS', previewId: stagedPreviewId },
+          source: iframes[0].contentWindow
+        })
+      );
+    });
+    // Must NOT be called a second time
+    expect(onMountSuccess).toHaveBeenCalledTimes(1);
+  });
+
+  it('Replaces staging iframe safely and resets discarded staging slot to about:blank', () => {
+    const v1Files = {
+      'src/App.jsx': 'export default function App() { return <div>V1</div>; }'
+    };
+    const v2Files = {
+      'src/App.jsx': 'export default function App() { return <div>V2 Broken</div>; }'
+    };
+    const onError = vi.fn();
+    let v1Id = null;
+    let v2Id = null;
+
+    const { container, rerender } = render(
+      <SandboxIframe
+        files={v1Files}
+        onError={onError}
+        onPreviewStaged={({ previewId }) => { v1Id = previewId; }}
+      />
+    );
+    const iframes = container.querySelectorAll('iframe');
+
+    // Mount V1 in slot A
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: { type: 'SANDBOX_MOUNT_SUCCESS', previewId: v1Id },
+          source: iframes[0].contentWindow
+        })
+      );
+    });
+    expect(iframes[0].className).toContain('opacity-100');
+
+    // Stage V2 in slot B
+    rerender(
+      <SandboxIframe
+        files={v2Files}
+        onError={onError}
+        onPreviewStaged={({ previewId }) => { v2Id = previewId; }}
+      />
+    );
+
+    // Runtime error occurs in staging slot B
+    act(() => {
+      window.dispatchEvent(
+        new MessageEvent('message', {
+          data: {
+            type: 'SANDBOX_RUNTIME_ERROR',
+            previewId: v2Id,
+            error: { message: 'Crash in V2' }
+          },
+          source: iframes[1].contentWindow
+        })
+      );
+    });
+
+    // Staging iframe B must have been cleared to about:blank to discard old root safely
+    expect(iframes[1].srcdoc).toBe('about:blank');
+    // Active slot A must remain completely unaffected
+    expect(iframes[0].className).toContain('opacity-100');
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'Crash in V2' }));
+  });
 });

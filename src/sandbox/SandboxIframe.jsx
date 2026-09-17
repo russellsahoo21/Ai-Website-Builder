@@ -25,6 +25,7 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
   const onPreviewStagedRef = useRef(onPreviewStaged);
   const lastEmittedErrorKeyRef = useRef(null);
   const currentPreviewIdRef = useRef(null);
+  const lastMountedPreviewIdRef = useRef(null);
   const mountTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -84,6 +85,7 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
 
     const previewId = 'prev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     currentPreviewIdRef.current = previewId;
+    lastMountedPreviewIdRef.current = null;
     onPreviewStagedRef.current?.({ previewId });
 
     const doc = buildPreviewDoc(files, { previewId });
@@ -166,6 +168,12 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
       }
 
       if (type === 'SANDBOX_MOUNT_SUCCESS') {
+        const resolvedId = previewId || currentPreviewIdRef.current;
+        if (lastMountedPreviewIdRef.current === resolvedId) {
+          return;
+        }
+        lastMountedPreviewIdRef.current = resolvedId;
+
         if (pendingDocRef.current) {
           lastGoodDocRef.current = pendingDocRef.current;
         }
@@ -177,7 +185,7 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
         pendingSlotRef.current = null;
         pendingIframeRef.current = null;
 
-        onMountSuccessRef.current?.({ previewId: previewId || currentPreviewIdRef.current });
+        onMountSuccessRef.current?.({ previewId: resolvedId });
       }
 
       if (type === 'SANDBOX_RUNTIME_ERROR') {

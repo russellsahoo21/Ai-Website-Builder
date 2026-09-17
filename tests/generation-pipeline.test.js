@@ -152,6 +152,21 @@ test('Pipeline 11: Preview — Preview HTML includes SANDBOX_MOUNT_SUCCESS and s
   assert.ok(html.includes("filename: 'src/App.jsx'"), 'Babel filename must be src/App.jsx, not App.tsx');
 });
 
+test('Pipeline 11b: Preview — Single React root stored on container and reused on repeated renders', () => {
+  const files = {
+    'src/App.jsx': 'export default function App() { return <h1>Test Mount</h1>; }'
+  };
+  const html = buildPreviewDoc(files);
+
+  // 1. Container root property exists in generated preview
+  assert.ok(html.includes('_reactRoot'), 'Must reference container._reactRoot');
+  assert.ok(html.includes('__aethercraftRoot'), 'Must reference window.__aethercraftRoot');
+
+  // 2. Safe launch wrapper prevents duplicate DOMContentLoaded / load execution
+  assert.ok(html.includes('safeLaunch'), 'Must use safeLaunch to guard against duplicate events');
+  assert.ok(html.includes('__mountSuccessEmitted'), 'Must deduplicate MOUNT_SUCCESS emission per container');
+});
+
 test('Pipeline 12: Token Rollback — Token rollback occurs after failed generation', () => {
   const mockStorage = new Map();
   globalThis.window = { dispatchEvent: () => {} };

@@ -15,7 +15,14 @@ test.describe('Real Browser AI Generation Flow (Prompt -> Runtime Error -> Auto-
 
   test('successfully executes prompt -> initial build with runtime error -> auto-repair -> working preview', async ({ page }) => {
     test.setTimeout(60000);
-    page.on('console', msg => console.log('[BROWSER]', msg.text()));
+    const consoleWarnings = [];
+    page.on('console', msg => {
+      const txt = msg.text();
+      console.log('[BROWSER]', txt);
+      if (msg.type() === 'warning' || txt.toLowerCase().includes('warning') || txt.includes('createRoot')) {
+        consoleWarnings.push(txt);
+      }
+    });
     page.on('response', res => { if (res.status() === 401) console.log('[401 URL]', res.url()); });
     let callCount = 0;
     const requestBodies = [];
@@ -105,5 +112,17 @@ test.describe('Real Browser AI Generation Flow (Prompt -> Runtime Error -> Auto-
     // 8. Test user interactivity in the repaired component
     await previewFrame.locator('#inc-btn').click();
     await expect(previewFrame.locator('#counter-value')).toHaveText('Count: 43');
+
+    // 9. Repeated render of the same preview inside the active iframe must safely reuse root
+    await previewFrame.locator('#repaired-app').evaluate(() => {
+      if (typeof window.__launchAetherCraft === 'function') {
+        window.__launchAetherCraft();
+      }
+    });
+    await expect(previewFrame.locator('#repaired-title')).toBeVisible();
+
+    // 10. Confirm zero "already been passed to createRoot()" warnings occurred
+    const rootWarnings = consoleWarnings.filter(w => w.includes('already been passed to createRoot()'));
+    expect(rootWarnings).toHaveLength(0);
   });
 });

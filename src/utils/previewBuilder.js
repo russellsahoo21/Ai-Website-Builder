@@ -406,12 +406,28 @@ export function buildPreviewDoc(files, options = {}) {
       targetComponent = window[defaultExp];
     }
     if (targetComponent) {
-      const root = ReactDOM.createRoot(document.getElementById('root'));
-      root.render(
-        React.createElement(ErrorBoundary, null, React.createElement(targetComponent))
-      );
+      const container = document.getElementById('root');
+      if (container) {
+        let root = container._reactRoot || window.__aethercraftRoot;
+        if (!root && ReactDOM && typeof ReactDOM.createRoot === 'function') {
+          root = ReactDOM.createRoot(container);
+          container._reactRoot = root;
+          window.__aethercraftRoot = root;
+        }
+        if (root && typeof root.render === 'function') {
+          root.render(
+            React.createElement(ErrorBoundary, null, React.createElement(targetComponent))
+          );
+        } else if (ReactDOM && typeof ReactDOM.render === 'function') {
+          ReactDOM.render(
+            React.createElement(ErrorBoundary, null, React.createElement(targetComponent)),
+            container
+          );
+        }
+      }
       setTimeout(() => {
-        if (!hasMountError) {
+        if (!hasMountError && !window.__mountSuccessEmitted) {
+          window.__mountSuccessEmitted = true;
           try {
             console.log('[IFRAME EMIT MOUNT_SUCCESS]', '${previewId}');
             window.parent.postMessage({
@@ -632,11 +648,19 @@ export function buildPreviewDoc(files, options = {}) {
       `}
     }
 
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    var hasLaunched = false;
+    function safeLaunch() {
+      if (hasLaunched) return;
+      hasLaunched = true;
       launchAetherCraft();
+    }
+    window.__launchAetherCraft = launchAetherCraft;
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      safeLaunch();
     } else {
-      window.addEventListener('DOMContentLoaded', launchAetherCraft);
-      window.addEventListener('load', launchAetherCraft);
+      window.addEventListener('DOMContentLoaded', safeLaunch, { once: true });
+      window.addEventListener('load', safeLaunch, { once: true });
     }
   </script>
 </body>
