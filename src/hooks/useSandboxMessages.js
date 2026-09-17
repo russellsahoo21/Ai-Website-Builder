@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { reportClientError } from '../services/monitoringService.js';
 
 const BENIGN_ERROR_PATTERNS = [
   /ResizeObserver/i,
@@ -121,6 +122,16 @@ export function useSandboxMessages({
 
         lastHandledErrorRef.current = rawMsg;
         lastHandledTimeRef.current = now;
+
+        reportClientError({
+          type: 'SANDBOX_RUNTIME_ERROR',
+          error: rawMsg,
+          previewId: event.data.previewId || previewIdRef.current,
+          context: {
+            line: event.data.line,
+            column: event.data.column,
+          },
+        });
 
         onRuntimeError?.(rawMsg);
       }

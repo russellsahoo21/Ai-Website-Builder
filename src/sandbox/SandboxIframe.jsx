@@ -223,13 +223,13 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
       <iframe
         ref={iframeARef}
         title="Sandbox Preview A"
-        sandbox="allow-scripts allow-modals allow-same-origin allow-forms"
+        sandbox="allow-scripts allow-modals allow-forms"
         className={`w-full h-full border-0 absolute inset-0 transition-opacity duration-150 ${activeSlot === 'A' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'}`}
       />
       <iframe
         ref={iframeBRef}
         title="Sandbox Preview B"
-        sandbox="allow-scripts allow-modals allow-same-origin allow-forms"
+        sandbox="allow-scripts allow-modals allow-forms"
         className={`w-full h-full border-0 absolute inset-0 transition-opacity duration-150 ${activeSlot === 'B' ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'}`}
       />
     </div>

@@ -108,21 +108,18 @@
 
 /* Header Titles in Navbar & Pages */
 .cl-navbarTitleText,
-.cl-headerTitle,
-.cl-userProfile-navbar .cl-headerTitle {
+.cl-headerTitle {
   color: #ffffff !important;
   font-weight: 700 !important;
 }
 
 .cl-navbarSubtitleText,
-.cl-headerSubtitle,
-.cl-userProfile-navbar .cl-headerSubtitle {
+.cl-headerSubtitle {
   color: #a1a1aa !important;
 }
 
 /* Navbar Nav Item Buttons (Profile, Security, etc.) */
-.cl-navbarButton,
-.cl-userProfile-navbar .cl-navbarButton {
+.cl-navbarButton {
   color: #a1a1aa !important;
   border-radius: 6px !important;
   transition: all 0.15s ease !important;
@@ -134,7 +131,6 @@
 }
 
 .cl-navbarButton[data-active="true"],
-.cl-navbarButton.cl-active,
 .cl-navbarButton[aria-selected="true"] {
   color: #ffffff !important;
   background-color: #27272a !important;
@@ -145,13 +141,11 @@
   color: inherit !important;
 }
 
-/* Profile Section Left Column Labels (Profile, Email addresses, Phone numbers, Connected accounts) */
+/* Profile Section Left Column Labels */
 .cl-profileSectionTitle,
 .cl-profileSectionTitleText,
-.cl-profileSectionLabel,
-.cl-userProfile-root .cl-profileSectionTitle,
-.cl-userProfile-root .cl-profileSectionTitleText {
-  color: #d4d4d8 !important; /* light zinc-300 */
+.cl-profileSectionLabel {
+  color: #d4d4d8 !important;
   font-weight: 600 !important;
   font-size: 0.875rem !important;
 }
@@ -161,11 +155,9 @@
   color: #a1a1aa !important;
 }
 
-/* Profile Section Content (Right Column) */
+/* Profile Section Content */
 .cl-profileSectionContent,
-.cl-profileSectionContent *,
-.cl-profilePage,
-.cl-profilePage * {
+.cl-profilePage {
   color: #f4f4f5;
 }
 
@@ -192,11 +184,7 @@
 /* Disconnected Account Warning Text & Secondary Notices */
 .cl-alert,
 .cl-alertText,
-.cl-alertDescription,
-.cl-userProfile-root [class*="disconnected"],
-.cl-userProfile-root [class*="notice"],
-.cl-userProfile-root [class*="subtitle"],
-.cl-userProfile-root [class*="subtext"] {
+.cl-alertDescription {
   color: #a1a1aa !important;
 }
 
@@ -206,7 +194,7 @@
   font-weight: 600 !important;
 }
 
-/* Action Links / Buttons (Update profile, Reconnect, Add email address, Connect account) */
+/* Action Links / Buttons */
 .cl-profileSectionPrimaryButton,
 .cl-profileSectionPrimaryButtonText,
 .cl-profileSectionAction,
@@ -257,7 +245,7 @@
   color: #a1a1aa !important;
 }
 
-.cl-userButtonPopoverActionButton:hover .cl-userButtonPopoverActionButtonIcon {
+.cl-userButtonPopoverActionButton:hover {
   color: #ffffff !important;
 }
 
@@ -411,18 +399,6 @@
   color: #71717a !important;
   margin-top: 0.25rem !important;
   opacity: 0.75 !important;
-}
-
-/* Catch-all safety: ensure NO text in Clerk modals falls back to dark color */
-.cl-userProfile-root p,
-.cl-userProfile-root span,
-.cl-userProfile-root label,
-.cl-userProfile-root div,
-.cl-userProfile-root h1,
-.cl-userProfile-root h2,
-.cl-userProfile-root h3,
-.cl-userProfile-root h4 {
-  color: inherit;
 }
 
 

@@ -526,16 +526,24 @@ export function buildPreviewDoc(files, options = {}) {
         if (!window.lucide && window.parent.lucide) window.lucide = window.parent.lucide;
       }
     } catch (e) {}
-    function loadDepIfMissing(name, src) {
+    function loadDepIfMissing(name, localSrc, fallbackCdn) {
       if (!window[name]) {
         var s = document.createElement('script');
-        s.src = src;
+        s.src = localSrc;
         s.async = false;
+        if (fallbackCdn) {
+          s.onerror = function() {
+            var fb = document.createElement('script');
+            fb.src = fallbackCdn;
+            fb.async = false;
+            document.head.appendChild(fb);
+          };
+        }
         document.head.appendChild(s);
       }
     }
-    loadDepIfMissing('React', 'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js');
-    loadDepIfMissing('ReactDOM', 'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js');
+    loadDepIfMissing('React', '/vendor/react.production.min.js', 'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js');
+    loadDepIfMissing('ReactDOM', '/vendor/react-dom.production.min.js', 'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js');
     loadDepIfMissing('lucide', 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js');
   </script>
   <style>
