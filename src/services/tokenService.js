@@ -170,6 +170,41 @@ export function recordTokenUsage(tokens = 0, metadata = {}, userId = currentUser
 }
 
 /**
+ * Rolls back token usage if a generation or validation operation failed.
+ * @param {number} tokens - Number of tokens to refund
+ * @param {string} [userId] - Optional user ID
+ * @returns {{ used: number, total: number, remaining: number, percent: number, userId: string }}
+ */
+export function rollbackTokenUsage(tokens = 0, userId = currentUserId) {
+  if (typeof window === 'undefined' || !tokens) return getTokenUsage(userId);
+
+  const current = getTokenUsage(userId);
+  const updatedUsed = Math.max(0, current.used - Math.max(0, tokens));
+  const { usageKey, effectiveUser } = getStorageKeys(userId);
+
+  localStorage.setItem(usageKey, String(updatedUsed));
+
+  const updated = {
+    used: updatedUsed,
+    total: current.total,
+    remaining: Math.max(0, current.total - updatedUsed),
+    percent: Math.min(100, Math.round((updatedUsed / current.total) * 100)),
+    period: current.period,
+    userId: effectiveUser,
+    lastTurn: {
+      tokens: -tokens,
+      rolledBack: true,
+    },
+  };
+
+  try {
+    window.dispatchEvent(new CustomEvent('tokenUsageUpdated', { detail: updated }));
+  } catch (e) {}
+
+  return updated;
+}
+
+/**
  * Synchronize token usage with server / Supabase
  */
 export async function syncTokenUsageWithServer(userId = currentUserId) {

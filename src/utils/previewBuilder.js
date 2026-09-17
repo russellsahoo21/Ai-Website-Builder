@@ -471,6 +471,9 @@ export function buildPreviewDoc(files, options = {}) {
       root.render(
         React.createElement(ErrorBoundary, null, React.createElement(targetComponent))
       );
+      try {
+        window.parent.postMessage({ type: 'SANDBOX_MOUNT_SUCCESS' }, '*');
+      } catch (e) {}
       setTimeout(() => {
         if (window.lucide) window.lucide.createIcons();
       }, 150);
@@ -479,7 +482,7 @@ export function buildPreviewDoc(files, options = {}) {
       try {
         window.parent.postMessage({
           type: 'SANDBOX_RUNTIME_ERROR',
-          error: { message: 'App component not found. Ensure primary component is named "App".' }
+          error: { message: 'App component not found in src/App.jsx. Ensure primary component is named "App".' }
         }, '*');
       } catch (e) {}
     }
@@ -522,9 +525,10 @@ export function buildPreviewDoc(files, options = {}) {
             ['react', { runtime: 'classic' }],
             'typescript'
           ],
-          filename: 'App.tsx'
+          filename: 'src/App.jsx',
+          sourceFileName: 'src/App.jsx'
         }).code;
-        var runner = new Function('React', 'ReactDOM', compiled);
+        var runner = new Function('React', 'ReactDOM', compiled + '\n//# sourceURL=src/App.jsx');
         runner(window.React, window.ReactDOM);
       } catch (err) {
         console.error('[AetherCraft] Compilation error:', err.message);

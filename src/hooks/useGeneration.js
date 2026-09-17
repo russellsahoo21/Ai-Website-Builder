@@ -4,6 +4,8 @@ import { parseGeneratedFiles } from '../services/fileParser.js';
 import { getFriendlyMessage, isRecoverable, buildFixPrompt } from '../sandbox/errorReporter.js';
 import { ensureStandardReactStructure } from '../utils/projectStructure.js';
 import { enhanceUserPrompt } from '../utils/promptEnhancer.js';
+import { validateProjectFiles } from '../utils/codeValidator.js';
+import { rollbackTokenUsage } from '../services/tokenService.js';
 
 const MAX_AUTO_FIX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 8000;
@@ -177,14 +179,26 @@ export function useGeneration({
           let { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
           if (!needsConversion && Object.keys(merged).length > 0) {
             merged = ensureStandardReactStructure(merged);
-            setFiles(merged);
+            const validation = validateProjectFiles(merged);
+            if (validation.isValid) {
+              setFiles(merged);
+              onRefresh();
+            } else {
+              console.warn('[Auto-Fix Validation Failed]', validation.errors);
+              if (finalResult?.totalConsumed > 0) {
+                rollbackTokenUsage(finalResult.totalConsumed, userIdRef.current);
+              }
+              const err = validation.errors[0];
+              if (autoFixCountRef.current < MAX_AUTO_FIX_ATTEMPTS) {
+                setTimeout(() => executeAutoFix(`Syntax error in ${err.file} at line ${err.line}, col ${err.column}: ${err.message}`, false), 500);
+              }
+            }
           }
 
           // Replace the status message with success (silent — no visible change to user)
           setMessages(prev => prev.filter(m => m._id !== statusMsgId));
           isGeneratingRef.current = false;
           setIsGenerating(false);
-          onRefresh();
 
           if (needsConversion) {
             // Trigger another round to get React output
@@ -295,16 +309,61 @@ export function useGeneration({
           let { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
 
           const hasAppJsx = Boolean(merged['src/App.jsx'] || merged['App.jsx']);
+          let isValidProject = false;
+          let validationErrors = [];
+
           if (!needsConversion && Object.keys(merged).length > 0) {
             merged = ensureStandardReactStructure(merged);
-            setFiles(merged);
+            const validation = validateProjectFiles(merged);
+            isValidProject = validation.isValid;
+            validationErrors = validation.errors || [];
+
+            if (isValidProject) {
+              setFiles(merged);
+            } else {
+              // Pre-save validation failed — preserve previous working project!
+              console.warn('[Pre-Save Validation Failed] Project contains syntax errors:', validationErrors);
+              if (finalResult?.totalConsumed > 0) {
+                rollbackTokenUsage(finalResult.totalConsumed, userIdRef.current);
+              }
+            }
 
             // If src/App.jsx was completely omitted by model, automatically repair in background
-            if (!hasAppJsx) {
+            if (!hasAppJsx && isValidProject) {
               setTimeout(() => {
                 executeAutoFix('src/App.jsx was omitted during generation. Please synthesize the complete src/App.jsx component.', false);
               }, 400);
             }
+          }
+
+          // If project validation failed, do NOT claim ready or commit broken files
+          if (!isValidProject && validationErrors.length > 0) {
+            const firstErr = validationErrors[0];
+            const friendlyErr = `Syntax issue detected in ${firstErr.file} (line ${firstErr.line}, col ${firstErr.column}). Preserving your working code while auto-repairing in background…`;
+            setMessages(prev => [...prev, { role: 'ai', content: friendlyErr }]);
+
+            setTelemetry({
+              status: 'idle',
+              phase: 'idle',
+              phaseMessage: `Syntax issue in ${firstErr.file}:${firstErr.line} — auto-repairing...`,
+              tokens: 0,
+              tokenSpeed: 0,
+              bytes: 0,
+              progressPercent: 0,
+              latestLine: '',
+              activeFile: firstErr.file,
+              parsedFilesCount: 0,
+            });
+
+            isGeneratingRef.current = false;
+            setIsGenerating(false);
+
+            if (autoFixCountRef.current < MAX_AUTO_FIX_ATTEMPTS) {
+              setTimeout(() => {
+                executeAutoFix(`Syntax error in ${firstErr.file} at line ${firstErr.line}, col ${firstErr.column}: ${firstErr.message}`, false);
+              }, 400);
+            }
+            return;
           }
 
           // Build clean reply text — never leak raw code, tool-call tokens, or filenames

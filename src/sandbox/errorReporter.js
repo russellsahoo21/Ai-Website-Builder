@@ -90,12 +90,23 @@ export function buildFixPrompt(rawError, currentCode) {
   rawError = rawError || '';
   currentCode = currentCode || '';
 
+  const fileMatch = rawError.match(/([\w/-]+\.(?:jsx|js|tsx|ts))/i);
+  const targetFile = fileMatch ? fileMatch[1] : 'src/App.jsx';
+
+  if (/SyntaxError|Unexpected token/i.test(rawError)) {
+    return (
+      `Fix this syntax error in ${targetFile}:\n"${rawError}"\n\n` +
+      `Check for unclosed JSX tags, missing braces, invalid expressions, or malformed imports.\n` +
+      `Return the complete corrected ${targetFile} inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`
+    );
+  }
+
   if (/Identifier.*already.*been.*declared/i.test(rawError)) {
     return (
       'Fix this error: ' + rawError + '\n\n' +
       'Rename any component that uses a reserved word (Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server) ' +
       'to a compound domain-specific name (e.g. FilterPanel, SearchBar). ' +
-      'Return the complete corrected src/App.jsx inside <<<FILE:src/App.jsx>>> and <<<END_FILE>>>.'
+      `Return the complete corrected ${targetFile} inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`
     );
   }
 
@@ -109,10 +120,10 @@ export function buildFixPrompt(rawError, currentCode) {
   }
 
   return (
-    'Fix this runtime error in src/App.jsx: "' + rawError + '"\n\n' +
+    `Fix this runtime error in ${targetFile}: "${rawError}"\n\n` +
     'Ensure all context hooks have safe defaults, no component names shadow globals, ' +
     'and all referenced variables are declared. ' +
-    'Return the complete corrected src/App.jsx inside <<<FILE:src/App.jsx>>> and <<<END_FILE>>>.'
+    `Return the complete corrected ${targetFile} inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`
   );
 }
 
@@ -130,11 +141,16 @@ export function parseSandboxError(errorInput) {
   let lineNumber = null;
 
   // Extract file and line from stack or message if available
-  const lineMatch = message.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|html)):(\d+)(?::(\d+))?/i) ||
-                    stack.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|html)):(\d+)(?::(\d+))?/i);
+  const lineMatch = message.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|ts|html))(?::|\s+at\s+line\s+)(\d+)(?::(\d+))?/i) ||
+                    stack.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|ts|html))(?::|\s+at\s+line\s+)(\d+)(?::(\d+))?/i);
   if (lineMatch) {
     detectedFile = lineMatch[1];
     lineNumber = parseInt(lineMatch[2], 10);
+  }
+
+  // Avoid reporting min.js or App.tsx or anonymous when the source file is App.jsx
+  if (detectedFile === 'min.js' || detectedFile === 'App.tsx' || detectedFile === 'anonymous') {
+    detectedFile = 'src/App.jsx';
   }
 
   if (/is not defined/i.test(message)) {

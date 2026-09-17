@@ -175,13 +175,45 @@ export async function streamGenerateWebsite({
       console.log(`[TokenOptimizer] Saved ${tokensSaved} tokens on this generation turn.`);
     }
 
-    // 2. Stream SSE Reader
+    // 2. Stream SSE Reader with Persistent Line Buffer
     const reader = response.body.getReader();
     const decoder = new TextDecoder('utf-8');
     let fullText = '';
     let exactProviderUsage = null;
+    let sseBuffer = '';
+    let isStreamDone = false;
 
     resetStallWatchdog();
+
+    const parseLine = (rawLine) => {
+      const trimmed = rawLine.trim();
+      if (!trimmed) return;
+      if (trimmed === 'data: [DONE]') {
+        isStreamDone = true;
+        return;
+      }
+      if (!trimmed.startsWith('data: ')) return;
+      const jsonStr = trimmed.slice(6).trim();
+      if (!jsonStr) return;
+      try {
+        const data = JSON.parse(jsonStr);
+        if (data.usage) {
+          exactProviderUsage = data.usage;
+        }
+        const delta = data.choices?.[0]?.delta?.content || '';
+        if (delta) {
+          fullText += delta;
+          if (onChunk) onChunk(delta, fullText);
+          const parsed = parseGeneratedFiles(fullText, currentFiles);
+          if (Object.keys(parsed.files).length > 0 && onFileParsed) {
+            onFileParsed(parsed);
+          }
+        }
+      } catch (parseErr) {
+        // Line was complete but malformed JSON from provider
+        console.warn('[AetherCraft SSE Parse Warning]', parseErr.message, 'Raw line:', jsonStr);
+      }
+    };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -189,62 +221,59 @@ export async function streamGenerateWebsite({
 
       resetStallWatchdog();
       const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+      sseBuffer += chunk;
+
+      // Split on newline; preserve the trailing incomplete fragment in sseBuffer
+      const lines = sseBuffer.split('\n');
+      sseBuffer = lines.pop() || '';
 
       for (const line of lines) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed === 'data: [DONE]') continue;
-        if (!trimmed.startsWith('data: ')) continue;
-        try {
-          const data = JSON.parse(trimmed.slice(6));
-          if (data.usage) {
-            exactProviderUsage = data.usage;
-          }
-          const delta = data.choices?.[0]?.delta?.content || '';
-          if (delta) {
-            fullText += delta;
-            if (onChunk) onChunk(delta, fullText);
-            const parsed = parseGeneratedFiles(fullText, currentFiles);
-            if (Object.keys(parsed.files).length > 0 && onFileParsed) {
-              onFileParsed(parsed);
-            }
-          }
-        } catch {
-          // ignore partial SSE fragments
-        }
+        parseLine(line);
       }
+
+      if (isStreamDone) break;
+    }
+
+    // Flush any remaining data at the end of the stream
+    if (sseBuffer && sseBuffer.trim()) {
+      parseLine(sseBuffer);
+      sseBuffer = '';
     }
 
     if (stallTimeout) clearTimeout(stallTimeout);
 
     // 3. Record tokens used in client ledger — 1:1 match with API provider bill
-    let totalConsumed;
+    let totalConsumed = 0;
     let isEstimated = false;
     if (exactProviderUsage && typeof exactProviderUsage.total_tokens === 'number' && exactProviderUsage.total_tokens > 0) {
       totalConsumed = exactProviderUsage.total_tokens;
-      console.log(`[Token Usage] Billed exact provider tokens: ${totalConsumed} (Prompt: ${exactProviderUsage.prompt_tokens}, Completion: ${exactProviderUsage.completion_tokens}, Raw:`, exactProviderUsage, ')');
+      console.log(`[Token Usage] Billed exact provider tokens: ${totalConsumed} (Prompt: ${exactProviderUsage.prompt_tokens}, Completion: ${exactProviderUsage.completion_tokens})`);
     } else {
       isEstimated = true;
       const completionTokens = Math.ceil(fullText.length / 3.8);
       totalConsumed = (tokensOptimized || 0) + completionTokens;
-      console.log(`[Token Usage] Provider usage omitted from stream, measured: ${totalConsumed} (Prompt: ${tokensOptimized || 0}, Completion: ${completionTokens})`);
+      console.log(`[Token Usage] Provider usage estimated: ${totalConsumed}`);
     }
-    recordTokenUsage(totalConsumed, {
-      isEstimated,
-      rawProviderUsage: exactProviderUsage,
-      promptTokens: exactProviderUsage?.prompt_tokens ?? tokensOptimized ?? 0,
-      completionTokens: exactProviderUsage?.completion_tokens ?? Math.ceil(fullText.length / 3.8),
-    }, userId);
+
+    if (totalConsumed > 0) {
+      recordTokenUsage(totalConsumed, {
+        isEstimated,
+        rawProviderUsage: exactProviderUsage,
+        promptTokens: exactProviderUsage?.prompt_tokens ?? tokensOptimized ?? 0,
+        completionTokens: exactProviderUsage?.completion_tokens ?? Math.ceil(fullText.length / 3.8),
+      }, userId);
+    }
 
     const finalParsed = parseGeneratedFiles(fullText, currentFiles);
-    if (onComplete) onComplete(fullText, finalParsed);
-    return { fullText, ...finalParsed };
+    if (onComplete) onComplete(fullText, { ...finalParsed, totalConsumed });
+    return { fullText, totalConsumed, ...finalParsed };
   } catch (error) {
     if (connTimeout) clearTimeout(connTimeout);
     if (stallTimeout) clearTimeout(stallTimeout);
 
     const isAbort = error.name === 'AbortError' || effectiveSignal?.aborted;
     const msg = isAbort ? 'AbortError: cancelled' : error.message;
+    error.isAbort = isAbort;
 
     console.warn('[AetherCraft AI Generation]', msg);
     if (onError) onError(new Error(msg));
@@ -308,3 +337,37 @@ export async function testOpenRouterConnection(apiKey, model = DEFAULT_MODEL) {
   }
   return 'Connected';
 }
+
+/**
+ * Creates an SSE line parser that maintains a persistent buffer across network chunks.
+ * Guarantees that incomplete JSON lines are never discarded or split, and flushes on EOF.
+ */
+export function createSseLineParser(onLine) {
+  let buffer = '';
+  let isDone = false;
+
+  return {
+    feed(chunk) {
+      if (isDone) return;
+      buffer += chunk;
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (line.trim() === 'data: [DONE]') {
+          isDone = true;
+        }
+        onLine(line);
+      }
+    },
+    flush() {
+      if (buffer && buffer.trim() && !isDone) {
+        onLine(buffer);
+        buffer = '';
+      }
+    },
+    getRemainder() {
+      return buffer;
+    }
+  };
+}
+

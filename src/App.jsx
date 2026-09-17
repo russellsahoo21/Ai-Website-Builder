@@ -245,8 +245,9 @@ export default function App({ initialRoute }) {
     isGenerating,
     enabled: currentRoute === 'studio',
     onRuntimeError: useCallback((msg) => {
-      console.warn('[Sandbox Runtime Warning]', msg);
-    }, []),
+      console.warn('[Sandbox Runtime Error Detected]', msg);
+      executeAutoFix(msg, false);
+    }, [executeAutoFix]),
     onManualFix: useCallback((msg) => executeAutoFix(msg, true), [executeAutoFix]),
   });
 

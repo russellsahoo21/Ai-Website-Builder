@@ -27,6 +27,7 @@ const BENIGN_ERROR_PATTERNS = [
  */
 export function useSandboxMessages({ isGenerating = false, enabled = true, onRuntimeError, onManualFix }) {
   const lastHandledTimeRef = useRef(0);
+  const lastHandledErrorRef = useRef('');
   const isGeneratingRef = useRef(isGenerating);
 
   useEffect(() => {
@@ -60,11 +61,18 @@ export function useSandboxMessages({ isGenerating = false, enabled = true, onRun
           return;
         }
 
-        // 3. Debounce rapid-fire duplicate errors (minimum 3.5s cooldown)
         const now = Date.now();
+        // 3. Trigger exactly once per error message within a 10-second window
+        if (lastHandledErrorRef.current === rawMsg && (now - lastHandledTimeRef.current < 10000)) {
+          return;
+        }
+
+        // 4. Minimum 3.5s cooldown between any distinct errors
         if (now - lastHandledTimeRef.current < 3500) {
           return;
         }
+
+        lastHandledErrorRef.current = rawMsg;
         lastHandledTimeRef.current = now;
 
         onRuntimeError?.(rawMsg);

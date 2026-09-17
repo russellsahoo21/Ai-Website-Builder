@@ -75,9 +75,13 @@ function classifyContent(content) {
  * @returns {{ files: Object, needsReactConversion: boolean }}
  */
 export function parseGeneratedFiles(text, existingFiles = {}) {
-  if (!text || typeof text !== 'string') return { files: {}, needsReactConversion: false };
+  if (!text || typeof text !== 'string') {
+    return { files: {}, errors: [], warnings: [], needsReactConversion: false, isComplete: false };
+  }
 
   const raw = {};
+  const errors = [];
+  const warnings = [];
 
   // Strategy 0: <<<PATCH:...>>> or <<<DIFF:...>>> delimiters (for surgical edits)
   const patchRegex = /<<<(?:PATCH|DIFF)(?::\s*([^\r\n>]+?))?\s*>>>([\s\S]*?)(?:<<<END_(?:PATCH|DIFF)>*|(?=<<<(?:PATCH|DIFF|FILE):)|\s*$)/g;
@@ -85,6 +89,13 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
   while ((patchMatch = patchRegex.exec(text)) !== null) {
     const rawTarget = patchMatch[1] ? cleanFilename(patchMatch[1]) : 'src/App.jsx';
     const name = normalizeFilePath(rawTarget);
+    const fullBlock = patchMatch[0];
+    const isClosed = fullBlock.includes('<<<END_PATCH') || fullBlock.includes('<<<END_DIFF');
+
+    if (!isClosed) {
+      warnings.push({ file: name, reason: 'Truncated patch block: missing <<<END_PATCH>>> delimiter.' });
+    }
+
     let patchContent = patchMatch[2].trim().replace(/<<<END_(?:PATCH|DIFF)>*/g, '').trim();
     if (name && patchContent) {
       // Find existing base file content (checking normalized paths)
@@ -97,21 +108,55 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
         const patchResult = applySearchReplacePatch(baseCode, patchContent);
         if (patchResult.success && patchResult.content.length >= MIN_CONTENT_LENGTH) {
           raw[name] = patchResult.content;
+        } else {
+          errors.push({ file: name, reason: 'Search-replace patch failed to match target text.' });
         }
+      } else {
+        errors.push({ file: name, reason: `Cannot patch ${name}: base file not found in workspace.` });
       }
     }
   }
 
-  // Strategy 1: <<<FILE:...>>> delimiters (bounded by <<<END_FILE>>>, next file start, or EOF)
-  const fileRegex = /<<<FILE:\s*([^\r\n>]+?)\s*>>>([\s\S]*?)(?:<<<END_FILE>>>|(?=<<<FILE:)|\s*$)/g;
-  let match;
-  while ((match = fileRegex.exec(text)) !== null) {
-    const name = normalizeFilePath(cleanFilename(match[1]));
-    let content = match[2].trim();
-    // Safety: strip any trailing <<<END_FILE markers if caught
-    content = content.replace(/<<<END_FILE>>>/g, '').trim();
-    if (name && content.length >= MIN_CONTENT_LENGTH) {
-      raw[name] = content;
+  // Strategy 1: <<<FILE:...>>> delimiters (Strictly requiring <<<END_FILE>>>)
+  if (text.includes('<<<FILE:')) {
+    const fileOpenings = [...text.matchAll(/<<<FILE:\s*([^\r\n>]+?)\s*>>>/g)];
+
+    for (let i = 0; i < fileOpenings.length; i++) {
+      const opening = fileOpenings[i];
+      const filenameRaw = opening[1];
+      const name = normalizeFilePath(cleanFilename(filenameRaw));
+      const startIndex = opening.index + opening[0].length;
+
+      // Look for the matching <<<END_FILE>>> before the next <<<FILE: or end of text
+      const nextOpeningIndex = (i + 1 < fileOpenings.length) ? fileOpenings[i + 1].index : text.length;
+      const fileSegment = text.slice(startIndex, nextOpeningIndex);
+
+      const endMarkerIndex = fileSegment.indexOf('<<<END_FILE>>>');
+      if (endMarkerIndex === -1) {
+        // Missing <<<END_FILE>>> delimiter — file block was cut off / truncated
+        errors.push({
+          file: name,
+          reason: `Missing <<<END_FILE>>> delimiter for ${name}. Model output was truncated or incomplete.`
+        });
+        // Preserve existing file if available
+        if (existingFiles[name]) {
+          raw[name] = existingFiles[name];
+        }
+        continue;
+      }
+
+      const content = fileSegment.slice(0, endMarkerIndex).trim();
+      if (content.length < MIN_CONTENT_LENGTH) {
+        warnings.push({
+          file: name,
+          reason: `File ${name} is suspiciously short (< ${MIN_CONTENT_LENGTH} chars).`
+        });
+        if (existingFiles[name]) {
+          raw[name] = existingFiles[name];
+        }
+      } else {
+        raw[name] = content;
+      }
     }
   }
 
@@ -133,13 +178,18 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
   }
 
   // Strategy 3: Markdown code blocks with optional preceding header
-  if (Object.keys(raw).length === 0) {
+  if (Object.keys(raw).length === 0 && text.includes('```')) {
     const mdRe = /(?:(?:^|\n)(?:#{1,4}|\*\*|File:?)\s*(?:[0-9]+[:.]\s*)?([^\r\n`*]+?\.(?:jsx|js|html|css|tsx|ts))\*?:?\s*\n)?```(?:html|css|javascript|js|jsx|tsx|typescript|react)?(?:\s+(?:filename="?([^"\n]+)"?|([\w./-]+)))?\n([\s\S]*?)(?:```|$)/gi;
     let m;
     while ((m = mdRe.exec(text)) !== null) {
       const rawName = m[1] || m[2] || m[3];
       const content = m[4].trim();
+      const isClosed = m[0].trimEnd().endsWith('```');
       const name = normalizeFilePath(rawName ? cleanFilename(rawName) : classifyContent(content));
+
+      if (!isClosed) {
+        warnings.push({ file: name, reason: `Unclosed markdown code block for ${name}.` });
+      }
       if (name && content.length >= MIN_CONTENT_LENGTH) {
         raw[name] = content;
       }
@@ -147,7 +197,7 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
   }
 
   // Strategy 4: Bare React/JSX code without delimiters
-  if (Object.keys(raw).length === 0) {
+  if (Object.keys(raw).length === 0 && errors.length === 0) {
     const start = text.search(
       /(?:import\s+React|export\s+default\s+function|function\s+App\b|const\s+App\s*=)/
     );
@@ -159,5 +209,13 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
     }
   }
 
-  return resolveFileConflicts(raw);
+  const resolved = resolveFileConflicts(raw);
+  const isComplete = errors.length === 0 && Object.keys(resolved.files).length > 0;
+
+  return {
+    ...resolved,
+    errors,
+    warnings,
+    isComplete,
+  };
 }

@@ -13,13 +13,18 @@ import { buildPreviewDoc } from '../utils/previewBuilder.js';
 export default function SandboxIframe({ files, keyTrigger, onError, className }) {
   const iframeRef = useRef(null);
   const lastGoodDocRef = useRef('');
+  const pendingDocRef = useRef('');
 
   useEffect(() => {
     if (!files || Object.keys(files).length === 0) return;
     const doc = buildPreviewDoc(files);
     if (!doc) return;
 
-    lastGoodDocRef.current = doc;
+    pendingDocRef.current = doc;
+    if (!lastGoodDocRef.current) {
+      lastGoodDocRef.current = doc;
+    }
+
     if (iframeRef.current) {
       iframeRef.current.srcdoc = doc;
     }
@@ -27,8 +32,20 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
 
   useEffect(() => {
     function handleMessage(event) {
-      if (event.data && event.data.type === 'SANDBOX_RUNTIME_ERROR') {
+      if (!event.data || typeof event.data !== 'object') return;
+
+      if (event.data.type === 'SANDBOX_MOUNT_SUCCESS') {
+        if (pendingDocRef.current) {
+          lastGoodDocRef.current = pendingDocRef.current;
+        }
+      }
+
+      if (event.data.type === 'SANDBOX_RUNTIME_ERROR') {
         onError?.(event.data.error || { message: 'Runtime sandbox error' });
+        // Preserve last known-good preview during repair
+        if (lastGoodDocRef.current && lastGoodDocRef.current !== pendingDocRef.current && iframeRef.current) {
+          iframeRef.current.srcdoc = lastGoodDocRef.current;
+        }
       }
     }
     window.addEventListener('message', handleMessage);
