@@ -40,6 +40,7 @@ export function useGeneration({
   const userIdRef = useRef(userId);
   useEffect(() => { userIdRef.current = userId; }, [userId]);
   const abortControllerRef = useRef(null);
+  const isGeneratingRef = useRef(false);
   const autoFixCountRef = useRef(0);
   const lastAutoFixTimeRef = useRef(0);
   const streamStartTimeRef = useRef(0);
