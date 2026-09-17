@@ -102,10 +102,19 @@ export async function POST(req) {
   const startTime = Date.now();
 
   try {
+    const body = await req.json().catch(() => ({}));
+    const {
+      messages = [],
+      currentFiles = {},
+      model = 'openrouter/free',
+      customApiKey = '',
+      userId: clientUserId = null,
+    } = body;
+
     // 1. Authenticate with Clerk Server-Side
     let authenticatedUserId = null;
     try {
-      const authSession = getServerAuthSession(req);
+      const authSession = await getServerAuthSession(req);
       authenticatedUserId = authSession?.userId || null;
     } catch (authError) {
       // In non-browser testing / mock environments
@@ -115,7 +124,13 @@ export async function POST(req) {
     const testUserId = process.env.NODE_ENV === 'test'
       ? req.headers.get('x-test-user-id')
       : null;
-    const effectiveUserId = authenticatedUserId || testUserId;
+
+    // In development environment, allow clientUserId as fallback for local guest/studio testing
+    const devUserId = (process.env.NODE_ENV === 'development' && clientUserId)
+      ? clientUserId
+      : null;
+
+    const effectiveUserId = authenticatedUserId || testUserId || devUserId;
 
     if (!effectiveUserId) {
       console.warn(`[GEN_AUTH_REJECT] [${requestId}] Unauthenticated generation request rejected.`);
@@ -153,14 +168,6 @@ export async function POST(req) {
         }
       );
     }
-
-    const body = await req.json();
-    const {
-      messages = [],
-      currentFiles = {},
-      model = 'openrouter/free',
-      customApiKey = '',
-    } = body;
 
     const isByok = Boolean(customApiKey && customApiKey.trim().length > 5);
     const currentPeriod = getCurrentPeriod();

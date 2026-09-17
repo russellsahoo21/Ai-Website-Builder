@@ -5,10 +5,10 @@ import { ensureStandardReactStructure } from '../../../src/utils/projectStructur
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function getEffectiveUserId(req) {
+async function getEffectiveUserId(req) {
   let authenticatedUserId = null;
   try {
-    const session = getServerAuthSession(req);
+    const session = await getServerAuthSession(req);
     authenticatedUserId = session?.userId || null;
   } catch (e) {}
 
@@ -20,7 +20,7 @@ function getEffectiveUserId(req) {
 }
 
 export async function GET(req) {
-  const userId = getEffectiveUserId(req);
+  const userId = await getEffectiveUserId(req);
   if (!userId) {
     return Response.json(
       { error: 'Unauthorized', code: 'UNAUTHORIZED' },
@@ -50,7 +50,7 @@ export async function GET(req) {
 }
 
 export async function POST(req) {
-  const userId = getEffectiveUserId(req);
+  const userId = await getEffectiveUserId(req);
   if (!userId) {
     return Response.json(
       { error: 'Unauthorized', code: 'UNAUTHORIZED' },
@@ -97,7 +97,7 @@ export async function POST(req) {
 }
 
 export async function DELETE(req) {
-  const userId = getEffectiveUserId(req);
+  const userId = await getEffectiveUserId(req);
   if (!userId) {
     return Response.json(
       { error: 'Unauthorized', code: 'UNAUTHORIZED' },

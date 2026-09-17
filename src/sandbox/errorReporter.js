@@ -31,6 +31,11 @@ const ERROR_PATTERNS = [
     recoverable: true,
   },
   {
+    pattern: /must be signed in|sign in to generate|unauthorized.*sign in/i,
+    message: 'You must be signed in to generate applications with AetherCraft. Please sign in to proceed.',
+    recoverable: false,
+  },
+  {
     pattern: /401|403|Unauthorized|Forbidden|Invalid API/i,
     message: 'Please check your API key in Settings.',
     recoverable: false,

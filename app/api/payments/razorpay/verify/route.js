@@ -27,10 +27,10 @@ export function verifyPaymentSignature(orderId, paymentId, signature, secret) {
   }
 }
 
-function getEffectiveUserId(req, clientUserId = null) {
+async function getEffectiveUserId(req, clientUserId = null) {
   let authenticatedUserId = null;
   try {
-    const session = getServerAuthSession(req);
+    const session = await getServerAuthSession(req);
     authenticatedUserId = session?.userId || null;
   } catch (e) {}
 
@@ -58,7 +58,7 @@ export async function POST(req) {
     user_id: clientUserId
   } = body;
 
-  const userId = getEffectiveUserId(req, clientUserId);
+  const userId = await getEffectiveUserId(req, clientUserId);
   if (!userId) {
     return Response.json(
       { error: 'Unauthorized: Authentication required to verify payment.', code: 'UNAUTHORIZED' },

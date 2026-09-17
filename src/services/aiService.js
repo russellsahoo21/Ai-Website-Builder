@@ -246,7 +246,7 @@ export async function streamGenerateWebsite({
     const isAbort = error.name === 'AbortError' || effectiveSignal?.aborted;
     const msg = isAbort ? 'AbortError: cancelled' : error.message;
 
-    console.error('[AetherCraft AI Generation]', msg);
+    console.warn('[AetherCraft AI Generation]', msg);
     if (onError) onError(new Error(msg));
     throw error;
   }

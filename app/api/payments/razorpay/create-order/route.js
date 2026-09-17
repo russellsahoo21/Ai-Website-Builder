@@ -4,10 +4,10 @@ import { PLANS } from '../../../../../src/config/plans.js';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-function getEffectiveUserId(req, clientUserId = null) {
+async function getEffectiveUserId(req, clientUserId = null) {
   let authenticatedUserId = null;
   try {
-    const session = getServerAuthSession(req);
+    const session = await getServerAuthSession(req);
     authenticatedUserId = session?.userId || null;
   } catch (e) {}
 
@@ -28,7 +28,7 @@ export async function POST(req) {
   const body = await req.json().catch(() => ({}));
   const { planId = 'pro', billingCycle = 'annual', currency = 'INR', couponCode, userId: clientUserId } = body;
 
-  const userId = getEffectiveUserId(req, clientUserId);
+  const userId = await getEffectiveUserId(req, clientUserId);
   if (!userId) {
     return Response.json(
       { error: 'Unauthorized: You must be logged in to initiate checkout.', code: 'UNAUTHORIZED' },

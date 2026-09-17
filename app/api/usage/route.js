@@ -23,7 +23,7 @@ export async function GET(req) {
     // 1. Authenticate with Clerk Server-Side
     let authenticatedUserId = null;
     try {
-      const session = getServerAuthSession(req);
+      const session = await getServerAuthSession(req);
       authenticatedUserId = session?.userId || null;
     } catch (e) {}
 

@@ -391,7 +391,7 @@ export function useGeneration({
             // Only show non-recoverable errors (auth, network) — everything else silent
             setMessages(prev => [...prev, { role: 'ai', content: friendly }]);
           }
-          console.error('[Generation error]', err.message);
+          console.warn('[Generation error]', err.message);
         },
       });
     } catch (err) {
@@ -405,7 +405,7 @@ export function useGeneration({
         activeFile: 'src/App.jsx',
         parsedFilesCount: 0,
       });
-      console.error('[handleSendMessage caught]', err.message);
+      console.warn('[handleSendMessage caught]', err.message);
     }
 
     return true;
