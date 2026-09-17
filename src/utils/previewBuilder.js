@@ -1,3 +1,5 @@
+import Babel from '@babel/standalone';
+
 /**
  * Universal preview document builder
  * Supports native React 18 JSX applications with Babel standalone,
@@ -236,79 +238,7 @@ export function buildPreviewDoc(files, options = {}) {
     ];
     const safeTopIcons = topIcons.filter(name => !userDeclaredNames.has(name));
 
-    return `<!DOCTYPE html>
-<html lang="en" class="dark">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AetherCraft Application Sandbox</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              50: '#fafafa',
-              100: '#f4f4f5',
-              500: '#71717a',
-              900: '#18181b',
-              950: '#090a0f'
-            }
-          }
-        }
-      }
-    }
-  </script>
-  <script>
-    try {
-      if (typeof window !== 'undefined' && (!window.localStorage || typeof window.localStorage.getItem !== 'function')) {
-        throw new Error();
-      }
-      window.localStorage.getItem('_probe');
-    } catch (e) {
-      var _memStorage = {};
-      try {
-        Object.defineProperty(window, 'localStorage', {
-          value: {
-            getItem: function(k) { return Object.prototype.hasOwnProperty.call(_memStorage, k) ? _memStorage[k] : null; },
-            setItem: function(k, v) { _memStorage[k] = String(v); },
-            removeItem: function(k) { delete _memStorage[k]; },
-            clear: function() { _memStorage = {}; },
-            key: function(i) { return Object.keys(_memStorage)[i] || null; },
-            get length() { return Object.keys(_memStorage).length; }
-          },
-          configurable: true,
-          writable: true
-        });
-      } catch (err) {}
-    }
-  </script>
-  <!-- React 18 & ReactDOM UMD (Fast jsDelivr CDN with unpkg fallback) -->
-  <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
-  <script>window.React || document.write('<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin><\\/script>')</script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
-  <script>window.ReactDOM || document.write('<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin><\\/script>')</script>
-  <!-- Lucide Icons -->
-  <script src="https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js"></script>
-  <script>window.lucide || document.write('<script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"><\\/script>')</script>
-  <!-- Babel Standalone -->
-  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.24.0/babel.min.js"></script>
-  <script>window.Babel || document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.24.0/babel.min.js"><\\/script>')</script>
-  <style>
-    body { background-color: #090a0f; color: #f4f4f5; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; margin: 0; padding: 0; }
-    ::-webkit-scrollbar { width: 6px; height: 6px; }
-    ::-webkit-scrollbar-track { background: #090a0f; }
-    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
-    ${css}
-  </style>
-</head>
-<body class="min-h-screen bg-[#090a0f] text-zinc-100 antialiased selection:bg-zinc-700">
-  <div id="root"></div>
-
-  <!-- Raw source preserved in plain text so Babel never misses DOMContentLoaded -->
-  <script id="aethercraft-source" type="text/plain">
+    const rawSourcePayload = `
     var _R = (typeof window !== 'undefined' && window.React) ? window.React : (typeof React !== 'undefined' ? React : null);
     if (_R) {
       window.useState = _R.useState;
@@ -400,11 +330,12 @@ export function buildPreviewDoc(files, options = {}) {
     }
 
     const _origUseContext = React.useContext;
-    React.useContext = function(context) {
-      const result = _origUseContext.apply(this, arguments);
+    React.useContext = function(ctx) {
+      const result = _origUseContext(ctx);
       if (result === undefined || result === null) {
         return new Proxy({}, {
           get: (target, prop) => {
+            if (prop === '$$typeof') return undefined;
             if (prop === Symbol.toPrimitive) return () => '';
             if (prop === 'toString') return () => '[SafeContextFallback]';
             return undefined;
@@ -414,6 +345,8 @@ export function buildPreviewDoc(files, options = {}) {
       return result;
     };
 
+    let hasMountError = false;
+
     // React ErrorBoundary to catch, render, and notify parent of runtime errors
     class ErrorBoundary extends React.Component {
       constructor(props) {
@@ -421,9 +354,11 @@ export function buildPreviewDoc(files, options = {}) {
         this.state = { hasError: false, error: null };
       }
       static getDerivedStateFromError(error) {
+        hasMountError = true;
         return { hasError: true, error };
       }
       componentDidCatch(error, errorInfo) {
+        hasMountError = true;
         console.error('[Sandbox ErrorBoundary]', error.message);
         try {
           window.parent.postMessage({
@@ -432,7 +367,7 @@ export function buildPreviewDoc(files, options = {}) {
             errorStage: 'runtime',
             error: {
               message: error?.message || String(error),
-              stack: error?.stack || '',
+              stack: errorInfo?.componentStack || error?.stack || '',
               duringMount: true
             }
           }, '*');
@@ -475,15 +410,18 @@ export function buildPreviewDoc(files, options = {}) {
       root.render(
         React.createElement(ErrorBoundary, null, React.createElement(targetComponent))
       );
-      try {
-        window.parent.postMessage({
-          type: 'SANDBOX_MOUNT_SUCCESS',
-          previewId: '${previewId}'
-        }, '*');
-      } catch (e) {}
       setTimeout(() => {
+        if (!hasMountError) {
+          try {
+            console.log('[IFRAME EMIT MOUNT_SUCCESS]', '${previewId}');
+            window.parent.postMessage({
+              type: 'SANDBOX_MOUNT_SUCCESS',
+              previewId: '${previewId}'
+            }, '*');
+          } catch (e) {}
+        }
         if (window.lucide) window.lucide.createIcons();
-      }, 150);
+      }, 60);
     } else {
       // No App component found — notify parent silently for BTS repair
       try {
@@ -495,6 +433,109 @@ export function buildPreviewDoc(files, options = {}) {
         }, '*');
       } catch (e) {}
     }
+`;
+
+    let precompiledCode = '';
+    let precompileError = null;
+    try {
+      if (typeof Babel !== 'undefined' && Babel.transform) {
+        precompiledCode = Babel.transform(rawSourcePayload, {
+          presets: [
+            ['react', { runtime: 'classic' }],
+            'typescript'
+          ],
+          filename: 'src/App.jsx',
+          sourceFileName: 'src/App.jsx'
+        }).code;
+      }
+    } catch (err) {
+      precompileError = err;
+    }
+
+    return `<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AetherCraft Application Sandbox</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#fafafa',
+              100: '#f4f4f5',
+              500: '#71717a',
+              900: '#18181b',
+              950: '#090a0f'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <script>
+    try {
+      if (typeof window !== 'undefined' && (!window.localStorage || typeof window.localStorage.getItem !== 'function')) {
+        throw new Error();
+      }
+      window.localStorage.getItem('_probe');
+    } catch (e) {
+      var _memStorage = {};
+      try {
+        Object.defineProperty(window, 'localStorage', {
+          value: {
+            getItem: function(k) { return Object.prototype.hasOwnProperty.call(_memStorage, k) ? _memStorage[k] : null; },
+            setItem: function(k, v) { _memStorage[k] = String(v); },
+            removeItem: function(k) { delete _memStorage[k]; },
+            clear: function() { _memStorage = {}; },
+            key: function(i) { return Object.keys(_memStorage)[i] || null; },
+            get length() { return Object.keys(_memStorage).length; }
+          },
+          configurable: true,
+          writable: true
+        });
+      } catch (err) {}
+    }
+  </script>
+  <!-- Parent Window Runtime Bridge (Zero-Network Fast Path) -->
+  <script>
+    try {
+      if (window.parent && window.parent !== window) {
+        if (!window.React && window.parent.React) window.React = window.parent.React;
+        if (!window.ReactDOM && window.parent.ReactDOM) window.ReactDOM = window.parent.ReactDOM;
+        if (!window.lucide && window.parent.lucide) window.lucide = window.parent.lucide;
+      }
+    } catch (e) {}
+    function loadDepIfMissing(name, src) {
+      if (!window[name]) {
+        var s = document.createElement('script');
+        s.src = src;
+        s.async = false;
+        document.head.appendChild(s);
+      }
+    }
+    loadDepIfMissing('React', 'https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js');
+    loadDepIfMissing('ReactDOM', 'https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js');
+    loadDepIfMissing('lucide', 'https://cdn.jsdelivr.net/npm/lucide@latest/dist/umd/lucide.min.js');
+  </script>
+  <style>
+    body { background-color: #090a0f; color: #f4f4f5; font-family: ui-sans-serif, system-ui, -apple-system, sans-serif; margin: 0; padding: 0; }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #090a0f; }
+    ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 3px; }
+    ${css}
+  </style>
+</head>
+<body class="min-h-screen bg-[#090a0f] text-zinc-100 antialiased selection:bg-zinc-700">
+  <div id="root"></div>
+
+  <!-- Raw source preserved in plain text for diagnostic fallback -->
+  <script id="aethercraft-source" type="text/plain">
+    ${rawSourcePayload}
   </script>
 
   <!-- Explicit Runner with Polling: Guarantees execution even if DOMContentLoaded already fired -->
@@ -502,6 +543,7 @@ export function buildPreviewDoc(files, options = {}) {
     ${shouldReportErrors ? `
     // Global error capture — postMessage to parent
     window.addEventListener('error', function(e) {
+      hasMountError = true;
       try {
         window.parent.postMessage({
           type: 'SANDBOX_RUNTIME_ERROR',
@@ -524,24 +566,55 @@ export function buildPreviewDoc(files, options = {}) {
     });
     ` : ''}
 
+    // Babel target filename: 'src/App.jsx'
     function launchAetherCraft() {
-      if (typeof Babel === 'undefined' || typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
-        setTimeout(launchAetherCraft, 40);
+      if (typeof React === 'undefined' || typeof ReactDOM === 'undefined') {
+        setTimeout(launchAetherCraft, 20);
+        return;
+      }
+      ${precompileError ? `
+      console.error('[AetherCraft] Compilation error:', ${JSON.stringify(precompileError.message)});
+      ${shouldReportErrors ? `
+      try {
+        window.parent.postMessage({
+          type: 'SANDBOX_RUNTIME_ERROR',
+          previewId: '${previewId}',
+          errorStage: 'compilation',
+          error: { message: ${JSON.stringify(precompileError.message)}, stack: ${JSON.stringify(precompileError.stack || '')} }
+        }, '*');
+      } catch (e) {}
+      ` : ''}
+      return;
+      ` : precompiledCode ? `
+      try {
+        var runner = new Function('React', 'ReactDOM', ${JSON.stringify(precompiledCode)} + '\\n//# sourceURL=src/App.jsx');
+        runner(window.React, window.ReactDOM);
+      } catch (err) {
+        console.error('[AetherCraft] Execution error:', err.message);
+        ${shouldReportErrors ? `
+        try {
+          window.parent.postMessage({
+            type: 'SANDBOX_RUNTIME_ERROR',
+            previewId: '${previewId}',
+            errorStage: 'runtime',
+            error: { message: err.message, stack: err.stack || '' }
+          }, '*');
+        } catch (e) {}
+        ` : ''}
+      }
+      ` : `
+      if (typeof Babel === 'undefined') {
+        setTimeout(launchAetherCraft, 30);
         return;
       }
       try {
         var sourceEl = document.getElementById('aethercraft-source');
         if (!sourceEl) return;
-        var rawCode = sourceEl.textContent;
-        var compiled = Babel.transform(rawCode, {
-          presets: [
-            ['react', { runtime: 'classic' }],
-            'typescript'
-          ],
-          filename: 'src/App.jsx',
-          sourceFileName: 'src/App.jsx'
+        var compiled = Babel.transform(sourceEl.textContent, {
+          presets: [['react', { runtime: 'classic' }], 'typescript'],
+          filename: 'src/App.jsx'
         }).code;
-        var runner = new Function('React', 'ReactDOM', compiled + '\n//# sourceURL=src/App.jsx');
+        var runner = new Function('React', 'ReactDOM', compiled + '\\n//# sourceURL=src/App.jsx');
         runner(window.React, window.ReactDOM);
       } catch (err) {
         console.error('[AetherCraft] Compilation error:', err.message);
@@ -556,6 +629,7 @@ export function buildPreviewDoc(files, options = {}) {
         } catch (e) {}
         ` : ''}
       }
+      `}
     }
 
     if (document.readyState === 'complete' || document.readyState === 'interactive') {

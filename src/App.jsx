@@ -51,6 +51,18 @@ import {
 import { setCurrentUserId as setTokenCurrentUserId } from './services/tokenService';
 import { syncUserProfile, fetchUserProfile } from './services/dbService';
 import { getSession } from './services/authService';
+import Babel from '@babel/standalone';
+
+import * as ReactDOMClient from 'react-dom/client';
+import * as ReactDOMBase from 'react-dom';
+
+const fullReactDOM = { ...ReactDOMBase, ...ReactDOMClient };
+
+if (typeof window !== 'undefined') {
+  window.Babel = Babel;
+  window.React = React;
+  window.ReactDOM = fullReactDOM;
+}
 
 function getAppRoute() {
   const path = window.location.pathname.replace(/^\//, '').split('?')[0].split('/')[0];
@@ -270,8 +282,15 @@ export default function App({ initialRoute }) {
     executeAutoFix(rawMsg, true);
   }, [executeAutoFix]);
 
-  const handleSandboxMountSuccess = useCallback(() => {
+  const [activePreviewId, setActivePreviewId] = useState(null);
+
+  const handleSandboxMountSuccess = useCallback(({ previewId } = {}) => {
     lastHandledErrorRef.current = '';
+    if (previewId) setActivePreviewId(previewId);
+  }, []);
+
+  const handlePreviewStaged = useCallback(({ previewId } = {}) => {
+    if (previewId) setActivePreviewId(previewId);
   }, []);
 
   // — Sandbox postMessage listener (Studio only, never runs on dashboard or behind user's back) —
@@ -279,6 +298,7 @@ export default function App({ initialRoute }) {
     isGenerating,
     enabled: currentRoute === 'studio',
     files,
+    previewId: activePreviewId,
     onRuntimeError: handleSandboxError,
     onManualFix: handleManualAutoFix,
   });
@@ -648,6 +668,7 @@ export default function App({ initialRoute }) {
                   setActiveTab('code');
                 }}
                 onMountSuccess={handleSandboxMountSuccess}
+                onPreviewStaged={handlePreviewStaged}
               />
             ) : (
               <CodeInspector

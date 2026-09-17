@@ -11,6 +11,7 @@ import {
   Layers 
 } from 'lucide-react';
 import { getPlanConfig } from '../config/plans.js';
+import { getTokenUsage } from '../services/tokenService.js';
 
 export default function UsageAnalyticsWidget({ 
   userProfile, 
@@ -28,6 +29,11 @@ export default function UsageAnalyticsWidget({
       setLoading(false);
       return;
     }
+
+    // Set initial local fallback immediately
+    const local = getTokenUsage(userId);
+    setInternalUsageData(prev => prev || local);
+
     if (!userProfile && !userId) {
       setLoading(false);
       return;
@@ -48,7 +54,24 @@ export default function UsageAnalyticsWidget({
     return () => { isMounted = false; };
   }, [externalUsageData, userId, userProfile]);
 
-  const usageData = externalUsageData || internalUsageData;
+  // Synchronize on real-time token events across tabs or local generations
+  useEffect(() => {
+    const handleUpdate = (e) => {
+      if (!externalUsageData) {
+        const local = getTokenUsage(userId);
+        setInternalUsageData(prev => ({
+          ...(prev || {}),
+          used: Math.max(prev?.used || 0, local?.used || 0),
+          remaining: Math.max(0, (prev?.total || 100000) - Math.max(prev?.used || 0, local?.used || 0)),
+        }));
+      }
+    };
+    window.addEventListener('tokenUsageUpdated', handleUpdate);
+    return () => window.removeEventListener('tokenUsageUpdated', handleUpdate);
+  }, [externalUsageData, userId]);
+
+  const localUsage = (!externalUsageData && !internalUsageData) ? getTokenUsage(userId) : null;
+  const usageData = externalUsageData || internalUsageData || localUsage;
   const planId = userProfile?.plan || usageData?.plan || 'free';
   const planConfig = getPlanConfig(planId);
   const isUnlimited = usageData?.isUnlimited || planId === 'pro' || planId === 'enterprise';

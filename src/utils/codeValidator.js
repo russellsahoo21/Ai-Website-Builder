@@ -199,6 +199,8 @@ export function validateProjectFiles(files = {}) {
   // 2. Validate individual files & collect local imports
   for (const [filename, content] of Object.entries(files)) {
     const lower = filename.toLowerCase();
+    const isConfigFile = lower === 'vite.config.js' || lower === 'vite.config.ts' || lower === 'tailwind.config.js' || lower === 'postcss.config.js' || lower.endsWith('.config.js') || lower.endsWith('.config.mjs');
+    if (isConfigFile) continue;
     if (lower.endsWith('.jsx') || lower.endsWith('.js') || lower.endsWith('.tsx') || lower.endsWith('.ts')) {
       const result = validateSourceCode(content, filename);
       if (!result.isValid) {

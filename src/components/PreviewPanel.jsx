@@ -16,7 +16,8 @@ export default function PreviewPanel({
   onSandboxError,
   onAutoFix,
   onViewCode,
-  onMountSuccess
+  onMountSuccess,
+  onPreviewStaged
 }) {
   const [activeError, setActiveError] = useState(null);
 
@@ -77,6 +78,7 @@ export default function PreviewPanel({
             keyTrigger={keyTrigger}
             onError={handleSandboxError}
             onMountSuccess={onMountSuccess}
+            onPreviewStaged={onPreviewStaged}
           />
 
           {/* Floating Actionable Diagnostic Banner */}

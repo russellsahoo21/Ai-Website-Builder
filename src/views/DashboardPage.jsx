@@ -442,23 +442,28 @@ export default function DashboardPage({
     ? Math.min(100, projectCount * 2)
     : Math.min(Math.round((projectCount / maxProjects) * 100), 100);
 
-  // Unified Token Usage Metrics (Server-backed with local fallback)
-  const effectiveTokensUsed = usageData?.used ?? tokenUsage?.used ?? 0;
+  // Unified Token Usage Metrics (Server-backed synchronized with local token tracker)
+  const effectiveTokensUsed = Math.max(usageData?.used || 0, tokenUsage?.used || 0);
   const effectiveTokenCap = isUnlimitedUser ? -1 : (usageData?.total || planConfig.monthlyTokenQuota || 100000);
   const effectiveTokensRemaining = isUnlimitedUser
     ? 'Unlimited'
-    : (usageData?.remaining ?? Math.max(0, effectiveTokenCap - effectiveTokensUsed));
+    : Math.max(0, effectiveTokenCap - effectiveTokensUsed);
   const tokenPercentUsed = isUnlimitedUser
     ? 0
     : Math.min(100, Math.round((effectiveTokensUsed / (effectiveTokenCap || 1)) * 100));
 
-  const resolvedUsageData = usageData || {
+  const resolvedUsageData = {
+    ...(usageData || {}),
     plan: userPlan,
     used: effectiveTokensUsed,
     total: effectiveTokenCap,
     remaining: effectiveTokensRemaining,
     percent: tokenPercentUsed,
     isUnlimited: isUnlimitedUser,
+    analytics: usageData?.analytics || {
+      dailyTrend: [],
+      modelBreakdown: {}
+    }
   };
 
   // Total files count across all projects

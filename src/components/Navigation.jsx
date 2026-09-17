@@ -34,7 +34,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
               <Link
                 role="button"
                 href="/dashboard"
-                onClick={() => navigateTo && navigateTo('dashboard')}
+                onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('dashboard'); } }}
                 className={`transition hover:text-white ${currentRoute === 'dashboard' ? 'text-white font-medium text-cyan-400' : ''}`}
               >
                 Dashboard
@@ -43,7 +43,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <Link
               role="button"
               href="/templates"
-              onClick={() => navigateTo && navigateTo('templates')}
+              onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('templates'); } }}
               className={`transition hover:text-white ${currentRoute === 'templates' ? 'text-white font-medium' : ''}`}
             >
               Templates
@@ -51,7 +51,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <Link
               role="button"
               href="/showcase"
-              onClick={() => navigateTo && navigateTo('showcase')}
+              onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('showcase'); } }}
               className={`transition hover:text-white ${currentRoute === 'showcase' ? 'text-white font-medium' : ''}`}
             >
               Showcase
@@ -59,7 +59,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <Link
               role="button"
               href="/integrations"
-              onClick={() => navigateTo && navigateTo('integrations')}
+              onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('integrations'); } }}
               className={`transition hover:text-white ${currentRoute === 'integrations' ? 'text-white font-medium' : ''}`}
             >
               Integrations
@@ -67,7 +67,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <Link
               role="button"
               href="/changelog"
-              onClick={() => navigateTo && navigateTo('changelog')}
+              onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('changelog'); } }}
               className={`transition hover:text-white ${currentRoute === 'changelog' ? 'text-white font-medium' : ''}`}
             >
               Changelog
@@ -75,7 +75,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <Link
               role="button"
               href="/pricing"
-              onClick={() => navigateTo && navigateTo('pricing')}
+              onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('pricing'); } }}
               className={`transition hover:text-white ${currentRoute === 'pricing' ? 'text-white font-medium' : ''}`}
             >
               Pricing
@@ -83,7 +83,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <Link
               role="button"
               href="/docs"
-              onClick={() => navigateTo && navigateTo('docs')}
+              onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('docs'); } }}
               className={`transition hover:text-white ${currentRoute === 'docs' ? 'text-white font-medium' : ''}`}
             >
               Docs
@@ -91,7 +91,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <Link
               role="button"
               href="/feedback"
-              onClick={() => navigateTo && navigateTo('feedback')}
+              onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('feedback'); } }}
               className={`transition hover:text-white ${currentRoute === 'feedback' ? 'text-white font-medium' : ''}`}
             >
               Feedback
@@ -214,7 +214,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <Link
               role="button"
               href="/dashboard"
-              onClick={() => { if (navigateTo) navigateTo('dashboard'); setIsMobileMenuOpen(false); }}
+              onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('dashboard'); } setIsMobileMenuOpen(false); }}
               className={`block w-full text-left py-2 text-sm font-medium transition ${
                 currentRoute === 'dashboard' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
               }`}
@@ -225,7 +225,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           <Link
             role="button"
             href="/templates"
-            onClick={() => { if (navigateTo) navigateTo('templates'); setIsMobileMenuOpen(false); }}
+            onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('templates'); } setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'templates' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
@@ -235,7 +235,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           <Link
             role="button"
             href="/showcase"
-            onClick={() => { if (navigateTo) navigateTo('showcase'); setIsMobileMenuOpen(false); }}
+            onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('showcase'); } setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'showcase' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
@@ -245,7 +245,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           <Link
             role="button"
             href="/integrations"
-            onClick={() => { if (navigateTo) navigateTo('integrations'); setIsMobileMenuOpen(false); }}
+            onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('integrations'); } setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'integrations' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
@@ -255,7 +255,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           <Link
             role="button"
             href="/pricing"
-            onClick={() => { if (navigateTo) navigateTo('pricing'); setIsMobileMenuOpen(false); }}
+            onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('pricing'); } setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'pricing' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
@@ -265,7 +265,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           <Link
             role="button"
             href="/docs"
-            onClick={() => { if (navigateTo) navigateTo('docs'); setIsMobileMenuOpen(false); }}
+            onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('docs'); } setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'docs' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
@@ -275,7 +275,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           <Link
             role="button"
             href="/changelog"
-            onClick={() => { if (navigateTo) navigateTo('changelog'); setIsMobileMenuOpen(false); }}
+            onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('changelog'); } setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'changelog' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
@@ -285,16 +285,15 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           <Link
             role="button"
             href="/feedback"
-            onClick={() => { if (navigateTo) navigateTo('feedback'); setIsMobileMenuOpen(false); }}
+            onClick={(e) => { if (navigateTo) { e.preventDefault(); navigateTo('feedback'); } setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'feedback' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
-            Bug Reports & Feedback
+            Feedback
           </Link>
         </div>
       )}
     </nav>
   );
 }
-

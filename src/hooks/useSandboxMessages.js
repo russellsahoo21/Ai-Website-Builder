@@ -25,14 +25,32 @@ const BENIGN_ERROR_PATTERNS = [
  * @param {Function} params.onRuntimeError - Called with (errorMsg) on SANDBOX_RUNTIME_ERROR
  * @param {Function} params.onManualFix - Called with (errorMsg) on TRIGGER_AUTO_FIX
  */
-export function useSandboxMessages({ isGenerating = false, enabled = true, onRuntimeError, onManualFix, files = null }) {
+export function useSandboxMessages({ 
+  isGenerating = false, 
+  enabled = true, 
+  onRuntimeError, 
+  onManualFix, 
+  files = null,
+  previewId = null,
+  expectedSource = null
+}) {
   const lastHandledTimeRef = useRef(0);
   const lastHandledErrorRef = useRef('');
   const isGeneratingRef = useRef(isGenerating);
+  const previewIdRef = useRef(previewId);
+  const expectedSourceRef = useRef(expectedSource);
 
   useEffect(() => {
     isGeneratingRef.current = isGenerating;
   }, [isGenerating]);
+
+  useEffect(() => {
+    previewIdRef.current = previewId;
+  }, [previewId]);
+
+  useEffect(() => {
+    expectedSourceRef.current = expectedSource;
+  }, [expectedSource]);
 
   // Reset handled error cache whenever files are updated/changed
   useEffect(() => {
@@ -55,12 +73,34 @@ export function useSandboxMessages({ isGenerating = false, enabled = true, onRun
       }
 
       if (event.data.type === 'SANDBOX_RUNTIME_ERROR') {
-        // 1. NEVER trigger auto-fix while code is actively streaming or compiling (only when idle)
+        // 1. Event.source validation: Message must originate from a child frame/window, never the host itself
+        if (!event.source || event.source === window) {
+          return;
+        }
+        if (expectedSourceRef.current && event.source !== expectedSourceRef.current) {
+          return;
+        }
+
+        // 2. Preview ID validation: Reject stale messages from previous builds
+        if (previewIdRef.current && event.data.previewId && event.data.previewId !== previewIdRef.current) {
+          return;
+        }
+        if (event.data.previewId && typeof event.data.previewId !== 'string') {
+          return;
+        }
+
+        // 3. Payload shape validation
+        const rawError = event.data.error;
+        if (!rawError || (typeof rawError !== 'object' && typeof rawError !== 'string')) {
+          return;
+        }
+
+        // 4. NEVER trigger auto-fix while code is actively streaming or compiling (only when idle)
         if (isGeneratingRef.current) {
           return;
         }
 
-        const rawMsg = event.data.error?.message || 'Runtime error';
+        const rawMsg = typeof rawError === 'string' ? rawError : (rawError.message || 'Runtime error');
 
         // 2. Filter out non-fatal/benign errors
         const isBenign = BENIGN_ERROR_PATTERNS.some((re) => re.test(rawMsg));

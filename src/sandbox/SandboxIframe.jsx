@@ -11,7 +11,7 @@ import { validateProjectFiles } from '../utils/codeValidator.js';
  * - Discards failed preview attempts without replacing the working preview
  * - Protects against compilation and syntax errors replacing last-good doc
  */
-export default function SandboxIframe({ files, keyTrigger, onError, onMountSuccess, className }) {
+export default function SandboxIframe({ files, keyTrigger, onError, onMountSuccess, onPreviewStaged, className }) {
   const [activeSlot, setActiveSlot] = useState('A');
   const activeSlotRef = useRef('A');
   const iframeARef = useRef(null);
@@ -22,6 +22,7 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
   const pendingIframeRef = useRef(null);
   const onErrorRef = useRef(onError);
   const onMountSuccessRef = useRef(onMountSuccess);
+  const onPreviewStagedRef = useRef(onPreviewStaged);
   const lastEmittedErrorKeyRef = useRef(null);
   const currentPreviewIdRef = useRef(null);
   const mountTimeoutRef = useRef(null);
@@ -37,6 +38,10 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
   useEffect(() => {
     onMountSuccessRef.current = onMountSuccess;
   }, [onMountSuccess]);
+
+  useEffect(() => {
+    onPreviewStagedRef.current = onPreviewStaged;
+  }, [onPreviewStaged]);
 
   useEffect(() => {
     return () => {
@@ -79,6 +84,7 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
 
     const previewId = 'prev_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
     currentPreviewIdRef.current = previewId;
+    onPreviewStagedRef.current?.({ previewId });
 
     const doc = buildPreviewDoc(files, { previewId });
     if (!doc) return;
@@ -100,7 +106,7 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
             errorStage: 'runtime',
           });
         }
-      }, 7000);
+      }, 15000);
     };
 
     // Initial mount: load into active slot
@@ -134,6 +140,8 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
       const { type, previewId, error, errorStage } = event.data;
       if (type !== 'SANDBOX_MOUNT_SUCCESS' && type !== 'SANDBOX_RUNTIME_ERROR') return;
 
+      console.log('[HOST RECEIVE]', type, previewId, 'CURRENT:', currentPreviewIdRef.current);
+
       // Stale preview ID check: if message provides a previewId and we have one active, ignore mismatches
       if (previewId && currentPreviewIdRef.current && previewId !== currentPreviewIdRef.current) {
         return;
@@ -143,51 +151,44 @@ export default function SandboxIframe({ files, keyTrigger, onError, onMountSucce
       const activeIframe = activeSlotRef.current === 'A' ? iframeARef.current : iframeBRef.current;
       const stagingIframe = activeSlotRef.current === 'A' ? iframeBRef.current : iframeARef.current;
 
+      const isFromA = Boolean(iframeARef.current && event.source === iframeARef.current.contentWindow);
+      const isFromB = Boolean(iframeBRef.current && event.source === iframeBRef.current.contentWindow);
+      const isMatchingPreview = Boolean(previewId && currentPreviewIdRef.current && previewId === currentPreviewIdRef.current);
+
+      if (!isFromA && !isFromB && !isMatchingPreview) {
+        // Message does not originate from either sandbox iframe nor match current preview
+        return;
+      }
+
+      if (mountTimeoutRef.current) {
+        clearTimeout(mountTimeoutRef.current);
+        mountTimeoutRef.current = null;
+      }
+
       if (type === 'SANDBOX_MOUNT_SUCCESS') {
-        // Strict event.source check: Only accept mount success from the expected pending iframe
-        const isExpectedSource = pendingIframe && event.source === pendingIframe.contentWindow;
-        if (!isExpectedSource) {
-          // Delayed or stale mount message from prior iframe instance — ignore!
-          return;
-        }
-
-        if (mountTimeoutRef.current) {
-          clearTimeout(mountTimeoutRef.current);
-          mountTimeoutRef.current = null;
-        }
-
         if (pendingDocRef.current) {
           lastGoodDocRef.current = pendingDocRef.current;
         }
-        // Promote staging slot to active once successfully mounted
-        if (pendingSlotRef.current) {
-          setActiveSlot(pendingSlotRef.current);
-          pendingSlotRef.current = null;
-          pendingIframeRef.current = null;
-        }
+
+        // Promote the slot that successfully mounted
+        const mountedSlot = isFromB ? 'B' : (isFromA ? 'A' : (pendingSlotRef.current || activeSlotRef.current || 'A'));
+        activeSlotRef.current = mountedSlot;
+        setActiveSlot(mountedSlot);
+        pendingSlotRef.current = null;
+        pendingIframeRef.current = null;
 
         onMountSuccessRef.current?.({ previewId: previewId || currentPreviewIdRef.current });
       }
 
       if (type === 'SANDBOX_RUNTIME_ERROR') {
-        const isPendingSource = pendingIframe && event.source === pendingIframe.contentWindow;
-        const isActiveSource = activeIframe && event.source === activeIframe.contentWindow;
-
-        // Ignore stale messages from old/destroyed iframe instances
-        if (!isPendingSource && !isActiveSource) {
-          return;
-        }
-
-        if (mountTimeoutRef.current) {
-          clearTimeout(mountTimeoutRef.current);
-          mountTimeoutRef.current = null;
-        }
-
         const normalizedError = typeof error === 'object' && error !== null
           ? { ...error, errorStage: errorStage || error.errorStage || 'runtime' }
           : { message: String(error || 'Runtime sandbox error'), errorStage: errorStage || 'runtime' };
 
         onErrorRef.current?.(normalizedError);
+
+        const isPendingSource = pendingSlotRef.current === 'A' ? isFromA : (pendingSlotRef.current === 'B' ? isFromB : false);
+        const isActiveSource = activeSlotRef.current === 'A' ? isFromA : (activeSlotRef.current === 'B' ? isFromB : false);
 
         // If error occurred in staging slot, discard staging without touching active preview
         if (isPendingSource) {

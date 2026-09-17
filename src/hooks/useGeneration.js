@@ -120,6 +120,7 @@ export function useGeneration({
    * Shows a subtle status note in chat, then replaces it with success on completion.
    */
   const executeAutoFix = useCallback(async (rawErrorMsg, isManual = false) => {
+    const now = Date.now();
     const isProviderWithDefault = selectedModelRef.current?.includes('gemini') || selectedModelRef.current?.includes('nvidia') || selectedModelRef.current?.includes('qwen') || selectedModelRef.current?.includes('groq') || selectedModelRef.current?.includes('gpt-oss');
     const hasKey = Boolean(apiKeyRef.current || isProviderWithDefault || import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_GROQ_API_KEY);
     if (!hasKey || isGeneratingRef.current) return;
