@@ -24,11 +24,11 @@ export default function PreviewPanel({
     setActiveError(null);
   }, [files, keyTrigger]);
 
-  const handleSandboxError = (err) => {
+  const handleSandboxError = useCallback((err) => {
     const parsed = parseSandboxError(err);
     setActiveError(parsed);
     onSandboxError?.(err);
-  };
+  }, [onSandboxError]);
   const getViewportClass = () => {
     switch (viewport) {
       case 'mobile': return 'w-[375px] h-[667px] my-auto rounded-[36px] border-[10px] border-zinc-800 shadow-2xl';

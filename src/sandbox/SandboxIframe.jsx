@@ -13,11 +13,23 @@ import { validateProjectFiles } from '../utils/codeValidator.js';
  */
 export default function SandboxIframe({ files, keyTrigger, onError, className }) {
   const [activeSlot, setActiveSlot] = useState('A');
+  const activeSlotRef = useRef('A');
   const iframeARef = useRef(null);
   const iframeBRef = useRef(null);
   const lastGoodDocRef = useRef('');
   const pendingDocRef = useRef('');
   const pendingSlotRef = useRef('A');
+  const pendingIframeRef = useRef(null);
+  const onErrorRef = useRef(onError);
+  const lastEmittedErrorKeyRef = useRef(null);
+
+  useEffect(() => {
+    activeSlotRef.current = activeSlot;
+  }, [activeSlot]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
 
   useEffect(() => {
     if (!files || Object.keys(files).length === 0) return;
@@ -26,15 +38,23 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
     const validation = validateProjectFiles(files);
     if (!validation.isValid) {
       const err = validation.errors[0] || { message: 'Compilation error in preview files' };
-      onError?.({
-        message: err.message,
-        file: err.file,
-        line: err.line,
-        column: err.column
-      });
-      // Do NOT update or stage invalid code
+      const errKey = `${err.file || 'unknown'}:${err.line || 0}:${err.column || 0}:${err.message}`;
+
+      // Prevent infinite loop if onError causes parent to rerender
+      if (lastEmittedErrorKeyRef.current !== errKey) {
+        lastEmittedErrorKeyRef.current = errKey;
+        onErrorRef.current?.({
+          message: err.message,
+          file: err.file,
+          line: err.line,
+          column: err.column,
+        });
+      }
       return;
     }
+
+    // Clear error tracking once files are valid
+    lastEmittedErrorKeyRef.current = null;
 
     const doc = buildPreviewDoc(files);
     if (!doc) return;
@@ -43,8 +63,10 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
 
     // Initial mount: load into active slot
     if (!lastGoodDocRef.current) {
-      pendingSlotRef.current = activeSlot;
-      const targetIframe = activeSlot === 'A' ? iframeARef.current : iframeBRef.current;
+      const currentSlot = activeSlotRef.current;
+      pendingSlotRef.current = currentSlot;
+      const targetIframe = currentSlot === 'A' ? iframeARef.current : iframeBRef.current;
+      pendingIframeRef.current = targetIframe;
       if (targetIframe) {
         targetIframe.srcdoc = doc;
       }
@@ -52,19 +74,31 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
     }
 
     // Staging update: load into background staging slot while keeping active visible
-    const stagingSlot = activeSlot === 'A' ? 'B' : 'A';
+    const stagingSlot = activeSlotRef.current === 'A' ? 'B' : 'A';
     pendingSlotRef.current = stagingSlot;
     const stagingIframe = stagingSlot === 'A' ? iframeARef.current : iframeBRef.current;
+    pendingIframeRef.current = stagingIframe;
     if (stagingIframe) {
       stagingIframe.srcdoc = doc;
     }
-  }, [files, keyTrigger, activeSlot, onError]);
+  }, [files, keyTrigger]);
 
   useEffect(() => {
     function handleMessage(event) {
       if (!event.data || typeof event.data !== 'object') return;
 
+      const pendingIframe = pendingIframeRef.current;
+      const activeIframe = activeSlotRef.current === 'A' ? iframeARef.current : iframeBRef.current;
+      const stagingIframe = activeSlotRef.current === 'A' ? iframeBRef.current : iframeARef.current;
+
       if (event.data.type === 'SANDBOX_MOUNT_SUCCESS') {
+        // Strict event.source check: Only accept mount success from the expected pending iframe
+        const isExpectedSource = pendingIframe && event.source === pendingIframe.contentWindow;
+        if (!isExpectedSource) {
+          // Delayed or stale mount message from prior iframe instance — ignore!
+          return;
+        }
+
         if (pendingDocRef.current) {
           lastGoodDocRef.current = pendingDocRef.current;
         }
@@ -72,22 +106,30 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
         if (pendingSlotRef.current) {
           setActiveSlot(pendingSlotRef.current);
           pendingSlotRef.current = null;
+          pendingIframeRef.current = null;
         }
       }
 
       if (event.data.type === 'SANDBOX_RUNTIME_ERROR') {
-        onError?.(event.data.error || { message: 'Runtime sandbox error' });
+        const isPendingSource = pendingIframe && event.source === pendingIframe.contentWindow;
+        const isActiveSource = activeIframe && event.source === activeIframe.contentWindow;
 
-        // If error occurred during staging, discard staging without touching active preview
-        if (pendingSlotRef.current && pendingSlotRef.current !== activeSlot) {
-          const stagingIframe = pendingSlotRef.current === 'A' ? iframeARef.current : iframeBRef.current;
+        // Ignore stale messages from old/destroyed iframe instances
+        if (!isPendingSource && !isActiveSource) {
+          return;
+        }
+
+        onErrorRef.current?.(event.data.error || { message: 'Runtime sandbox error' });
+
+        // If error occurred in staging slot, discard staging without touching active preview
+        if (isPendingSource) {
           if (stagingIframe) {
             stagingIframe.srcdoc = 'about:blank';
           }
           pendingSlotRef.current = null;
-        } else if (lastGoodDocRef.current) {
+          pendingIframeRef.current = null;
+        } else if (isActiveSource && lastGoodDocRef.current) {
           // If error happened in active iframe, restore last good doc
-          const activeIframe = activeSlot === 'A' ? iframeARef.current : iframeBRef.current;
           if (activeIframe && activeIframe.srcdoc !== lastGoodDocRef.current) {
             activeIframe.srcdoc = lastGoodDocRef.current;
           }
@@ -97,7 +139,7 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
 
     window.addEventListener('message', handleMessage);
     return () => window.removeEventListener('message', handleMessage);
-  }, [activeSlot, onError]);
+  }, []);
 
   return (
     <div className={`relative w-full h-full overflow-hidden bg-[#090a0f] ${className || ''}`}>

@@ -240,16 +240,42 @@ export default function App({ initialRoute }) {
     onRefresh,
   });
 
+  const lastHandledErrorRef = useRef('');
+
+  useEffect(() => {
+    lastHandledErrorRef.current = '';
+  }, [files]);
+
+  const handleSandboxError = useCallback((err) => {
+    // Unify validation and repair:
+    // If SandboxIframe or PreviewPanel detects an error, trigger auto-repair when idle
+    if (isGenerating) return;
+
+    const rawMsg = typeof err === 'string' ? err : (err?.message || 'Syntax error in project files');
+
+    // Prevent duplicate repair requests for the same unchanged error
+    if (lastHandledErrorRef.current === rawMsg) {
+      return;
+    }
+    lastHandledErrorRef.current = rawMsg;
+
+    console.warn('[Sandbox Unified Error -> Auto-Repair]', rawMsg);
+    executeAutoFix(rawMsg, false);
+  }, [isGenerating, executeAutoFix]);
+
+  const handleManualAutoFix = useCallback((err) => {
+    lastHandledErrorRef.current = '';
+    const rawMsg = typeof err === 'string' ? err : (err?.message || 'Rendering error');
+    executeAutoFix(rawMsg, true);
+  }, [executeAutoFix]);
+
   // — Sandbox postMessage listener (Studio only, never runs on dashboard or behind user's back) —
   useSandboxMessages({
     isGenerating,
     enabled: currentRoute === 'studio',
     files,
-    onRuntimeError: useCallback((msg) => {
-      console.warn('[Sandbox Runtime Error Detected]', msg);
-      executeAutoFix(msg, false);
-    }, [executeAutoFix]),
-    onManualFix: useCallback((msg) => executeAutoFix(msg, true), [executeAutoFix]),
+    onRuntimeError: handleSandboxError,
+    onManualFix: handleManualAutoFix,
   });
 
   // — Route sync —
@@ -610,7 +636,8 @@ export default function App({ initialRoute }) {
                 telemetry={telemetry}
                 onCancel={handleCancelGeneration}
                 promptText={messages.slice().reverse().find(m => m.role === 'user')?.content || ''}
-                onAutoFix={(err) => executeAutoFix(err, true)}
+                onSandboxError={handleSandboxError}
+                onAutoFix={handleManualAutoFix}
                 onViewCode={() => setActiveTab('code')}
               />
             ) : (

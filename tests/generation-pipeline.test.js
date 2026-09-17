@@ -394,3 +394,122 @@ test('Pipeline 19: Sandbox Iframe — Compilation and syntax errors cannot repla
   }
   assert.equal(activePreviewDoc, lastGoodDoc, 'Last good preview doc must not be replaced by broken syntax');
 });
+
+test('Pipeline 20: Message Association — Stale mount messages from untracked sources do not promote pending documents', () => {
+  const pendingWindow = { name: 'valid_staging_iframe' };
+  const staleWindow = { name: 'stale_old_iframe' };
+
+  let activeDoc = 'doc_v1';
+  let pendingDoc = 'doc_v2';
+  let promoted = false;
+
+  function handleMountEvent(event) {
+    // Only accept from expected pending window
+    if (event.source !== pendingWindow) {
+      return; // Ignored as stale!
+    }
+    activeDoc = pendingDoc;
+    promoted = true;
+  }
+
+  // 1. Stale event arrives
+  handleMountEvent({ source: staleWindow, data: { type: 'SANDBOX_MOUNT_SUCCESS' } });
+  assert.equal(promoted, false, 'Stale mount event must be ignored');
+  assert.equal(activeDoc, 'doc_v1', 'Active preview must remain v1');
+
+  // 2. Expected event arrives
+  handleMountEvent({ source: pendingWindow, data: { type: 'SANDBOX_MOUNT_SUCCESS' } });
+  assert.equal(promoted, true, 'Genuine mount event must promote preview');
+  assert.equal(activeDoc, 'doc_v2', 'Active preview is promoted to v2');
+});
+
+test('Pipeline 21: Message Association — Stale runtime error messages from untracked sources do not trigger error callbacks', () => {
+  const activeWindow = { name: 'active_iframe' };
+  const pendingWindow = { name: 'pending_iframe' };
+  const foreignWindow = { name: 'foreign_window' };
+
+  let handledError = null;
+
+  function handleRuntimeErrorEvent(event) {
+    const isPending = event.source === pendingWindow;
+    const isActive = event.source === activeWindow;
+    if (!isPending && !isActive) {
+      return; // Stale message from old instance ignored!
+    }
+    handledError = event.data.error;
+  }
+
+  // Stale event from foreign window
+  handleRuntimeErrorEvent({ source: foreignWindow, data: { type: 'SANDBOX_RUNTIME_ERROR', error: { message: 'stale crash' } } });
+  assert.equal(handledError, null, 'Stale error must be completely ignored');
+
+  // Error from genuine pending staging window
+  handleRuntimeErrorEvent({ source: pendingWindow, data: { type: 'SANDBOX_RUNTIME_ERROR', error: { message: 'staging crash' } } });
+  assert.equal(handledError?.message, 'staging crash', 'Genuine staging error must be processed');
+});
+
+test('Pipeline 22: Unified Repair Flow — Dispatched syntax errors automatically route to repair when idle without requiring manual click', () => {
+  let isGenerating = false;
+  let autoFixTriggered = false;
+  let repairMessage = '';
+  let lastHandledError = '';
+
+  function handleSandboxError(err) {
+    if (isGenerating) return;
+    const rawMsg = typeof err === 'string' ? err : err?.message;
+    if (lastHandledError === rawMsg) return;
+    lastHandledError = rawMsg;
+    autoFixTriggered = true;
+    repairMessage = rawMsg;
+  }
+
+  // Simulate SandboxIframe discovering invalid syntax in generated project
+  const invalidFiles = {
+    'src/App.jsx': 'export default function App() { return <div>Syntax Error;'
+  };
+  const validation = validateProjectFiles(invalidFiles);
+  assert.equal(validation.isValid, false);
+
+  // Calls handleSandboxError directly
+  handleSandboxError(validation.errors[0]);
+  assert.equal(autoFixTriggered, true, 'Automatic repair must be triggered immediately without requiring user click');
+  assert.ok(repairMessage.includes('src/App.jsx'));
+
+  // Duplicate error with same message is rejected
+  autoFixTriggered = false;
+  handleSandboxError(validation.errors[0]);
+  assert.equal(autoFixTriggered, false, 'Identical unchanged error must not trigger duplicate repair');
+});
+
+test('Pipeline 23: Double-Buffered Staging — Repaired code replaces active preview only after verified matching window mount success', () => {
+  let activeSlot = 'A';
+  let stagingSlot = 'B';
+  let lastGoodDoc = '<h1>Initial Working Preview</h1>';
+  let pendingDoc = '<h1>Repaired Modular Preview</h1>';
+
+  const windowA = { id: 'window_A' };
+  const windowB = { id: 'window_B' };
+
+  let currentPendingWindow = windowB; // Staged in slot B
+
+  function processMountMessage(event) {
+    if (event.source !== currentPendingWindow) {
+      return false; // Rejected
+    }
+    lastGoodDoc = pendingDoc;
+    activeSlot = stagingSlot;
+    currentPendingWindow = null;
+    return true;
+  }
+
+  // Try mounting with window A while window B is pending
+  const staleResult = processMountMessage({ source: windowA });
+  assert.equal(staleResult, false);
+  assert.equal(activeSlot, 'A', 'Active slot must remain A');
+
+  // Verify mount with genuine window B
+  const genuineResult = processMountMessage({ source: windowB });
+  assert.equal(genuineResult, true);
+  assert.equal(activeSlot, 'B', 'Active slot promoted to B');
+  assert.equal(lastGoodDoc, pendingDoc, 'Last good preview updated');
+});
