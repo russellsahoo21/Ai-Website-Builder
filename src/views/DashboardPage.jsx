@@ -60,15 +60,31 @@ import { useUser, useClerk } from '@clerk/react';
 import { dark } from '@clerk/themes';
 import { formatTimeAgo, getAllProjects, syncProjectsWithCloud } from '../services/projectService.js';
 import { isCloudDbConfigured } from '../services/supabaseClient.js';
+import { fetchUserProfile } from '../services/dbService.js';
 import { downloadProjectZip } from '../utils/zipExporter.js';
 import { buildPreviewDoc } from '../utils/previewBuilder.js';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates.js';
 import { AVAILABLE_MODELS, testOpenRouterConnection } from '../services/aiService.js';
 import { getTokenUsage, setCurrentUserId as setTokenCurrentUserId } from '../services/tokenService.js';
+import { getPlanConfig } from '../config/plans.js';
 import FeedbackView from './FeedbackView.jsx';
+import UsageAnalyticsWidget from '../components/UsageAnalyticsWidget.jsx';
+import WorkspaceSwitcher from '../components/WorkspaceSwitcher.jsx';
+import TeamInviteModal from '../components/TeamInviteModal.jsx';
 
 export const MAX_FREE_PROJECTS = 5;
 export const MAX_PRO_PROJECTS = 50;
+
+function formatTokenCount(count) {
+  if (count === null || count === undefined) return '0';
+  if (typeof count === 'number') return count.toLocaleString();
+  if (typeof count === 'string') {
+    const num = Number(count);
+    if (!isNaN(num) && count.trim() !== '') return num.toLocaleString();
+    return count; // e.g. "Unlimited"
+  }
+  return String(count);
+}
 
 const PROMPT_SUGGESTIONS = [
   { label: 'Fintech Expense Tracker', prompt: 'Fintech Expense Tracker with analytics, CRUD transactions, category filters, and localStorage' },
@@ -153,7 +169,7 @@ function ProjectPreviewThumbnail({ files, title, onQuickPreview, onOpenStudio })
           <iframe
             srcDoc={doc}
             title={title || 'App Preview'}
-            sandbox="allow-scripts"
+            sandbox="allow-scripts allow-same-origin"
             tabIndex={-1}
             scrolling="no"
             loading="lazy"
@@ -216,7 +232,8 @@ export default function DashboardPage({
   apiKey = '',
   setApiKey,
   selectedModel = 'openrouter/free',
-  setSelectedModel
+  setSelectedModel,
+  userProfile: userProfileProp = null
 }) {
   const { user, isLoaded } = useUser();
   const clerk = useClerk();
@@ -281,25 +298,45 @@ export default function DashboardPage({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [previewModalProject, setPreviewModalProject] = useState(null);
   const [previewDeviceMode, setPreviewDeviceMode] = useState('desktop');
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   
-  // Real-time Monthly Token Usage Tracking (100,000 cap per individual user)
+  // Real-time Server-Backed Token Usage Tracking
+  const [usageData, setUsageData] = useState(null);
   const [tokenUsage, setTokenUsage] = useState(() => getTokenUsage(user?.id));
+
+  const fetchUsageData = React.useCallback(async () => {
+    if (!user?.id) return;
+    try {
+      const res = await fetch('/api/usage');
+      if (res.ok) {
+        const data = await res.json();
+        if (!data.error) {
+          setUsageData(data);
+        }
+      }
+    } catch (e) {
+      // Offline or network error - fallback to local token service
+    }
+  }, [user?.id]);
+
   useEffect(() => {
     if (user?.id) {
       setTokenCurrentUserId(user.id);
+      fetchUsageData();
     }
     setTokenUsage(getTokenUsage(user?.id));
-  }, [user?.id]);
+  }, [user?.id, fetchUsageData]);
 
   useEffect(() => {
     const handleTokenUpdate = (e) => {
       if (!e?.detail?.userId || e.detail.userId === (user?.id || 'guest')) {
         setTokenUsage(getTokenUsage(user?.id));
+        fetchUsageData();
       }
     };
     window.addEventListener('tokenUsageUpdated', handleTokenUpdate);
     return () => window.removeEventListener('tokenUsageUpdated', handleTokenUpdate);
-  }, [user?.id]);
+  }, [user?.id, fetchUsageData]);
   
   // Persistent Sidebar View State
   const [activeSidebarTab, setActiveSidebarTab] = useState(() => {
@@ -350,7 +387,7 @@ export default function DashboardPage({
         if (!Array.isArray(imported)) throw new Error("Invalid format: expected array of projects");
         const existing = getAllProjects();
         const existingIds = new Set(existing.map(p => p.id));
-        const storedPlan = localStorage.getItem('aethercraft_user_plan') || 'free';
+        const storedPlan = cloudProfile?.plan || 'free';
         const isUnlimited = storedPlan === 'enterprise' || storedPlan === 'studio' || storedPlan === 'unlimited';
         const isPro = storedPlan === 'pro';
         const userMax = isUnlimited ? Infinity : isPro ? MAX_PRO_PROJECTS : MAX_FREE_PROJECTS;
@@ -381,9 +418,21 @@ export default function DashboardPage({
     reader.readAsText(file);
   };
 
+  const [cloudProfile, setCloudProfile] = useState(null);
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchUserProfile(user.id).then(p => {
+        if (p) setCloudProfile(p);
+      });
+    }
+  }, [user?.id]);
+
   // Quota calculations & plan state
-  const userPlan = typeof localStorage !== 'undefined' ? (localStorage.getItem('aethercraft_user_plan') || 'free') : 'free';
-  const isUnlimitedUser = userPlan === 'enterprise' || userPlan === 'studio' || userPlan === 'unlimited';
+  const userPlan = userProfileProp?.plan || cloudProfile?.plan || usageData?.plan || 'free';
+  const userProfile = userProfileProp || cloudProfile || (usageData?.plan ? { plan: usageData.plan } : { plan: userPlan });
+  const planConfig = getPlanConfig(userPlan);
+  const isUnlimitedUser = usageData?.isUnlimited || planConfig?.monthlyTokenQuota === -1 || userPlan === 'enterprise' || userPlan === 'studio' || userPlan === 'unlimited';
   const isProUser = userPlan === 'pro';
   const isPaidUser = isUnlimitedUser || isProUser;
   const maxProjects = isUnlimitedUser ? Infinity : isProUser ? MAX_PRO_PROJECTS : MAX_FREE_PROJECTS;
@@ -392,6 +441,25 @@ export default function DashboardPage({
   const quotaPercent = isUnlimitedUser
     ? Math.min(100, projectCount * 2)
     : Math.min(Math.round((projectCount / maxProjects) * 100), 100);
+
+  // Unified Token Usage Metrics (Server-backed with local fallback)
+  const effectiveTokensUsed = usageData?.used ?? tokenUsage?.used ?? 0;
+  const effectiveTokenCap = isUnlimitedUser ? -1 : (usageData?.total || planConfig.monthlyTokenQuota || 100000);
+  const effectiveTokensRemaining = isUnlimitedUser
+    ? 'Unlimited'
+    : (usageData?.remaining ?? Math.max(0, effectiveTokenCap - effectiveTokensUsed));
+  const tokenPercentUsed = isUnlimitedUser
+    ? 0
+    : Math.min(100, Math.round((effectiveTokensUsed / (effectiveTokenCap || 1)) * 100));
+
+  const resolvedUsageData = usageData || {
+    plan: userPlan,
+    used: effectiveTokensUsed,
+    total: effectiveTokenCap,
+    remaining: effectiveTokensRemaining,
+    percent: tokenPercentUsed,
+    isUnlimited: isUnlimitedUser,
+  };
 
   // Total files count across all projects
   const totalFilesCount = useMemo(() => {
@@ -405,7 +473,9 @@ export default function DashboardPage({
       const q = searchQuery.toLowerCase();
       list = list.filter(p => 
         (p.name && p.name.toLowerCase().includes(q)) ||
-        (p.prompt && p.prompt.toLowerCase().includes(q))
+        (p.prompt && p.prompt.toLowerCase().includes(q)) ||
+        (p.files && Object.keys(p.files).some(fn => fn.toLowerCase().includes(q))) ||
+        (p.files && Object.values(p.files).some(content => typeof content === 'string' && content.toLowerCase().includes(q)))
       );
     }
     if (filterType === 'recent') {
@@ -720,7 +790,7 @@ export default function DashboardPage({
                   </div>
                 </div>
 
-                {/* Monthly AI Token Quota Tracker (100,000 Cap) */}
+                {/* Monthly AI Token Quota Tracker */}
                 <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-zinc-800/90 mt-2">
                   <div className="flex items-center justify-between text-xs mb-1.5">
                     <span className="font-semibold text-zinc-300 text-[11px] flex items-center gap-1">
@@ -728,19 +798,23 @@ export default function DashboardPage({
                       <span>AI Tokens / Mo</span>
                     </span>
                     <span className="font-mono text-[11px] font-bold text-cyan-300">
-                      {(tokenUsage?.used || 0).toLocaleString()} / 100k
+                      {isUnlimitedUser 
+                        ? 'Unlimited' 
+                        : `${formatTokenCount(effectiveTokensUsed)} / ${effectiveTokenCap >= 1000 ? `${Math.round(effectiveTokenCap / 1000)}k` : effectiveTokenCap}`}
                     </span>
                   </div>
                   <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden mb-1.5">
                     <div 
                       className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-cyan-500 to-indigo-500"
-                      style={{ width: `${Math.min(100, (((tokenUsage?.used || 0) / 100000) * 100))}%` }}
+                      style={{ width: `${tokenPercentUsed}%` }}
                     />
                   </div>
                   <div className="text-[10px] text-zinc-400 flex items-center justify-between">
-                    <span>{(tokenUsage?.remaining ?? 100000).toLocaleString()} left</span>
+                    <span>
+                      {isUnlimitedUser ? 'Unlimited tokens' : `${formatTokenCount(effectiveTokensRemaining)} left`}
+                    </span>
                     <span className="text-[9px] px-1.5 py-0.2 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/50 font-mono">
-                      ALL MODELS
+                      {isUnlimitedUser ? 'UNLIMITED' : 'ALL MODELS'}
                     </span>
                   </div>
                 </div>
@@ -1206,6 +1280,16 @@ export default function DashboardPage({
                   </div>
                   <p className="text-[11px] text-zinc-500 mt-2">Self-contained Vite bundle</p>
                 </div>
+              </div>
+
+              {/* Real-time Usage & Quota Analytics Widget */}
+              <div className="pt-2">
+                <UsageAnalyticsWidget
+                  userProfile={userProfile}
+                  usageData={resolvedUsageData}
+                  projectCount={projects.length}
+                  onUpgrade={() => navigateTo('checkout', { plan: 'pro' })}
+                />
               </div>
 
               {/* Projects Library Filter Header */}
@@ -2130,6 +2214,13 @@ npm run dev
           </div>
         </div>
       )}
+
+      <TeamInviteModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        activeWorkspaceId={null}
+        workspaceName="My Team Workspace"
+      />
 
       </main>
     </div>

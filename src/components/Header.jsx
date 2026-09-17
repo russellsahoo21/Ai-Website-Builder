@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import React, { useState } from 'react';
 import { 
   Monitor, 
@@ -11,8 +11,12 @@ import {
   RotateCcw, 
   Settings2,
   ArrowLeft,
-  FolderKanban
+  FolderKanban,
+  History,
+  Undo2,
+  Redo2
 } from 'lucide-react';
+import WorkspaceSwitcher from './WorkspaceSwitcher.jsx';
 
 export default function Header({
   activeTab,
@@ -27,7 +31,16 @@ export default function Header({
   projectCount = 0,
   activeProjectName = '',
   onBackToHome,
-  isGenerating
+  isGenerating,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo,
+  onOpenVersionHistory,
+  versionCount = 0,
+  userId,
+  onOpenInviteModal,
+  onOpenCreateWorkspace
 }) {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -74,6 +87,17 @@ export default function Header({
             </span>
           )}
         </button>
+
+        <div className="h-3.5 w-px bg-zinc-800 hidden md:block"></div>
+
+        {/* Workspace Switcher */}
+        <div className="hidden sm:block">
+          <WorkspaceSwitcher 
+            userId={userId} 
+            onOpenInviteModal={onOpenInviteModal}
+            onOpenCreateWorkspace={onOpenCreateWorkspace}
+          />
+        </div>
       </div>
 
       {/* View Mode & Viewport Switchers */}
@@ -140,6 +164,46 @@ export default function Header({
 
       {/* Action Buttons */}
       <div className="flex items-center gap-1.5">
+        {onUndo && (
+          <button
+            onClick={onUndo}
+            disabled={!canUndo}
+            className="p-1.5 rounded-md border border-zinc-800 hover:bg-zinc-900 disabled:opacity-30 text-zinc-400 hover:text-white transition cursor-pointer disabled:cursor-not-allowed"
+            title="Undo file changes (Ctrl+Z)"
+          >
+            <Undo2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {onRedo && (
+          <button
+            onClick={onRedo}
+            disabled={!canRedo}
+            className="p-1.5 rounded-md border border-zinc-800 hover:bg-zinc-900 disabled:opacity-30 text-zinc-400 hover:text-white transition cursor-pointer disabled:cursor-not-allowed"
+            title="Redo file changes (Ctrl+Y)"
+          >
+            <Redo2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+
+        {onOpenVersionHistory && (
+          <button
+            onClick={onOpenVersionHistory}
+            className="flex items-center gap-1 px-2 py-1 rounded-md border border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-cyan-400 transition cursor-pointer group"
+            title="Project Version History & Checkpoints"
+          >
+            <History className="w-3.5 h-3.5 group-hover:rotate-[-30deg] transition-transform" />
+            <span className="hidden lg:inline text-xs font-medium">History</span>
+            {versionCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-cyan-950/80 border border-cyan-800/60 text-[10px] text-cyan-300 font-mono">
+                {versionCount}
+              </span>
+            )}
+          </button>
+        )}
+
+        <div className="h-4 w-px bg-zinc-800 mx-0.5" />
+
         <button
           onClick={handleRefreshClick}
           className="p-1.5 rounded-md border border-zinc-800 hover:bg-zinc-900 text-zinc-400 hover:text-white transition cursor-pointer"

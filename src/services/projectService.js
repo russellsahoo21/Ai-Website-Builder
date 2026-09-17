@@ -60,7 +60,7 @@ export function getDefaultStarterProjects() {
 export function deriveProjectName(prompt) {
   if (!prompt || typeof prompt !== 'string') return 'Untitled Project';
   const clean = prompt
-    .replace(/^(build|create|design|make|generate)\s+(a|an|the)?\s*/i, '')
+    .replace(/^(?:build|create|design|make|generate)\s+(?:(?:an|a|the)\s+)?/i, '')
     .trim();
   if (!clean) return 'Untitled Project';
   const words = clean.split(/\s+/).slice(0, 5).join(' ');
@@ -331,3 +331,103 @@ export function formatTimeAgo(isoString) {
     return 'Recently';
   }
 }
+
+const MAX_PROJECT_VERSIONS = 30;
+
+/**
+ * Creates a named version checkpoint for a project.
+ */
+export function createProjectVersion(projectId, label, files, prompt = '', userId = currentUserId) {
+  if (!projectId || !files) return null;
+  try {
+    const project = getProjectById(projectId, userId);
+    if (!project) return null;
+
+    const versions = Array.isArray(project.versions) ? [...project.versions] : [];
+    const structuredFiles = ensureStandardReactStructure(files);
+    const newVersion = {
+      id: `ver_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      label: label || `Checkpoint ${versions.length + 1}`,
+      prompt: prompt || '',
+      createdAt: new Date().toISOString(),
+      files: structuredFiles,
+      fileCount: Object.keys(structuredFiles).length,
+    };
+
+    versions.unshift(newVersion);
+    if (versions.length > MAX_PROJECT_VERSIONS) {
+      versions.length = MAX_PROJECT_VERSIONS;
+    }
+
+    const updatedProject = {
+      ...project,
+      versions,
+    };
+
+    saveProject(updatedProject, userId);
+    return newVersion;
+  } catch (err) {
+    console.error('Failed to create project version:', err);
+    return null;
+  }
+}
+
+/**
+ * Retrieves all stored versions for a project.
+ */
+export function getProjectVersions(projectId, userId = currentUserId) {
+  if (!projectId) return [];
+  const project = getProjectById(projectId, userId);
+  return Array.isArray(project?.versions) ? project.versions : [];
+}
+
+/**
+ * Restores a project to a previous version checkpoint.
+ */
+export function restoreProjectVersion(projectId, versionId, userId = currentUserId) {
+  if (!projectId || !versionId) return null;
+  try {
+    const project = getProjectById(projectId, userId);
+    if (!project || !Array.isArray(project.versions)) return null;
+
+    const targetVersion = project.versions.find(v => v.id === versionId);
+    if (!targetVersion || !targetVersion.files) return null;
+
+    const updatedProject = {
+      ...project,
+      files: { ...targetVersion.files },
+      fileCount: Object.keys(targetVersion.files).length,
+      updatedAt: new Date().toISOString(),
+    };
+
+    saveProject(updatedProject, userId);
+    return { project: updatedProject, restoredVersion: targetVersion };
+  } catch (err) {
+    console.error('Failed to restore project version:', err);
+    return null;
+  }
+}
+
+/**
+ * Deletes a specific version checkpoint from a project.
+ */
+export function deleteProjectVersion(projectId, versionId, userId = currentUserId) {
+  if (!projectId || !versionId) return false;
+  try {
+    const project = getProjectById(projectId, userId);
+    if (!project || !Array.isArray(project.versions)) return false;
+
+    const filtered = project.versions.filter(v => v.id !== versionId);
+    const updatedProject = {
+      ...project,
+      versions: filtered,
+    };
+
+    saveProject(updatedProject, userId);
+    return true;
+  } catch (err) {
+    console.error('Failed to delete project version:', err);
+    return false;
+  }
+}
+

@@ -1,5 +1,6 @@
 "use client";
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { ArrowRight, FolderKanban, Menu, X } from 'lucide-react';
 import { useUser, SignInButton, SignUpButton, UserButton } from '@clerk/react';
 import { dark } from '@clerk/themes';
@@ -13,8 +14,10 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
       <div className="max-w-7xl mx-auto px-6 h-14 flex items-center justify-between">
         {/* Brand */}
         <div className="flex items-center gap-8">
-          <button
-            onClick={() => navigateTo('landing')}
+          <Link
+            role="button"
+            href="/"
+            onClick={() => navigateTo && navigateTo('landing')}
             className="flex items-center gap-2.5 text-left group"
           >
             <div className="w-6 h-6 rounded-md bg-zinc-100 flex items-center justify-center text-black font-bold text-xs tracking-tighter">
@@ -23,60 +26,76 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
             <span className="font-semibold text-sm tracking-tight text-white group-hover:text-zinc-300 transition">
               AetherCraft
             </span>
-          </button>
+          </Link>
 
           {/* Clean Text-Only Links */}
           <div className="hidden lg:flex items-center gap-6 text-xs text-zinc-400">
             {isSignedIn && (
-              <button
-                onClick={() => navigateTo('dashboard')}
+              <Link
+                role="button"
+                href="/dashboard"
+                onClick={() => navigateTo && navigateTo('dashboard')}
                 className={`transition hover:text-white ${currentRoute === 'dashboard' ? 'text-white font-medium text-cyan-400' : ''}`}
               >
                 Dashboard
-              </button>
+              </Link>
             )}
-            <button
-              onClick={() => navigateTo('templates')}
+            <Link
+              role="button"
+              href="/templates"
+              onClick={() => navigateTo && navigateTo('templates')}
               className={`transition hover:text-white ${currentRoute === 'templates' ? 'text-white font-medium' : ''}`}
             >
               Templates
-            </button>
-            <button
-              onClick={() => navigateTo('showcase')}
+            </Link>
+            <Link
+              role="button"
+              href="/showcase"
+              onClick={() => navigateTo && navigateTo('showcase')}
               className={`transition hover:text-white ${currentRoute === 'showcase' ? 'text-white font-medium' : ''}`}
             >
               Showcase
-            </button>
-            <button
-              onClick={() => navigateTo('integrations')}
+            </Link>
+            <Link
+              role="button"
+              href="/integrations"
+              onClick={() => navigateTo && navigateTo('integrations')}
               className={`transition hover:text-white ${currentRoute === 'integrations' ? 'text-white font-medium' : ''}`}
             >
               Integrations
-            </button>
-            <button
-              onClick={() => navigateTo('changelog')}
+            </Link>
+            <Link
+              role="button"
+              href="/changelog"
+              onClick={() => navigateTo && navigateTo('changelog')}
               className={`transition hover:text-white ${currentRoute === 'changelog' ? 'text-white font-medium' : ''}`}
             >
               Changelog
-            </button>
-            <button
-              onClick={() => navigateTo('pricing')}
+            </Link>
+            <Link
+              role="button"
+              href="/pricing"
+              onClick={() => navigateTo && navigateTo('pricing')}
               className={`transition hover:text-white ${currentRoute === 'pricing' ? 'text-white font-medium' : ''}`}
             >
               Pricing
-            </button>
-            <button
-              onClick={() => navigateTo('docs')}
+            </Link>
+            <Link
+              role="button"
+              href="/docs"
+              onClick={() => navigateTo && navigateTo('docs')}
               className={`transition hover:text-white ${currentRoute === 'docs' ? 'text-white font-medium' : ''}`}
             >
               Docs
-            </button>
-            <button
-              onClick={() => navigateTo('feedback')}
+            </Link>
+            <Link
+              role="button"
+              href="/feedback"
+              onClick={() => navigateTo && navigateTo('feedback')}
               className={`transition hover:text-white ${currentRoute === 'feedback' ? 'text-white font-medium' : ''}`}
             >
               Feedback
-            </button>
+            </Link>
           </div>
         </div>
 
@@ -84,8 +103,10 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
         <div className="flex items-center gap-3">
           {(!isLoaded || !isSignedIn) ? (
             <div className="flex items-center gap-1.5">
-              <button 
-                onClick={() => navigateTo('login')}
+              <Link 
+                role="button"
+                href="/login"
+                onClick={() => navigateTo && navigateTo('login')}
                 className={`text-xs font-medium transition px-2.5 py-1.5 rounded-md cursor-pointer ${
                   currentRoute === 'login' 
                     ? 'text-white bg-zinc-800 border border-zinc-700 font-semibold' 
@@ -93,9 +114,11 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
                 }`}
               >
                 Sign In
-              </button>
-              <button 
-                onClick={() => navigateTo('signup')}
+              </Link>
+              <Link 
+                role="button"
+                href="/signup"
+                onClick={() => navigateTo && navigateTo('signup')}
                 className={`text-xs font-medium transition px-2.5 py-1.5 rounded-md cursor-pointer ${
                   currentRoute === 'signup' 
                     ? 'text-white bg-zinc-800 border border-zinc-700 font-semibold' 
@@ -103,7 +126,7 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
                 }`}
               >
                 Sign Up
-              </button>
+              </Link>
             </div>
           ) : (
             <UserButton 
@@ -130,17 +153,21 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
           )}
 
           {(!isLoaded || !isSignedIn) ? (
-            <button 
-              onClick={() => navigateTo('signup')}
+            <Link 
+              role="button"
+              href="/signup"
+              onClick={() => navigateTo && navigateTo('signup')}
               className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-medium tracking-tight transition cursor-pointer"
             >
               <span>Launch Studio</span>
               <ArrowRight className="w-3 h-3" />
-            </button>
+            </Link>
           ) : (
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigateTo('dashboard')}
+              <Link
+                role="button"
+                href="/dashboard"
+                onClick={() => navigateTo && navigateTo('dashboard')}
                 className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition border ${
                   currentRoute === 'dashboard'
                     ? 'bg-zinc-800 text-white border-zinc-700'
@@ -155,15 +182,17 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
                     {projectCount}
                   </span>
                 )}
-              </button>
+              </Link>
 
-              <button
-                onClick={() => navigateTo('studio')}
+              <Link
+                role="button"
+                href="/studio"
+                onClick={() => navigateTo && navigateTo('studio')}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white hover:bg-zinc-200 text-black text-xs font-medium tracking-tight transition"
               >
                 <span>Studio</span>
                 <ArrowRight className="w-3 h-3" />
-              </button>
+              </Link>
             </div>
           )}
 
@@ -182,71 +211,87 @@ export default function Navigation({ currentRoute, navigateTo, onOpenProjects, p
       {isMobileMenuOpen && (
         <div className="lg:hidden border-t border-zinc-800 bg-[#090a0d] px-6 py-4 space-y-3">
           {isSignedIn && (
-            <button
-              onClick={() => { navigateTo('dashboard'); setIsMobileMenuOpen(false); }}
+            <Link
+              role="button"
+              href="/dashboard"
+              onClick={() => { if (navigateTo) navigateTo('dashboard'); setIsMobileMenuOpen(false); }}
               className={`block w-full text-left py-2 text-sm font-medium transition ${
                 currentRoute === 'dashboard' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
               }`}
             >
               Dashboard ({projectCount} projects)
-            </button>
+            </Link>
           )}
-          <button
-            onClick={() => { navigateTo('templates'); setIsMobileMenuOpen(false); }}
+          <Link
+            role="button"
+            href="/templates"
+            onClick={() => { if (navigateTo) navigateTo('templates'); setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'templates' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Templates Explorer
-          </button>
-          <button
-            onClick={() => { navigateTo('showcase'); setIsMobileMenuOpen(false); }}
+          </Link>
+          <Link
+            role="button"
+            href="/showcase"
+            onClick={() => { if (navigateTo) navigateTo('showcase'); setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'showcase' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Community Showcase
-          </button>
-          <button
-            onClick={() => { navigateTo('integrations'); setIsMobileMenuOpen(false); }}
+          </Link>
+          <Link
+            role="button"
+            href="/integrations"
+            onClick={() => { if (navigateTo) navigateTo('integrations'); setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'integrations' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Integrations
-          </button>
-          <button
-            onClick={() => { navigateTo('pricing'); setIsMobileMenuOpen(false); }}
+          </Link>
+          <Link
+            role="button"
+            href="/pricing"
+            onClick={() => { if (navigateTo) navigateTo('pricing'); setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'pricing' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Pricing
-          </button>
-          <button
-            onClick={() => { navigateTo('docs'); setIsMobileMenuOpen(false); }}
+          </Link>
+          <Link
+            role="button"
+            href="/docs"
+            onClick={() => { if (navigateTo) navigateTo('docs'); setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'docs' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Documentation
-          </button>
-          <button
-            onClick={() => { navigateTo('changelog'); setIsMobileMenuOpen(false); }}
+          </Link>
+          <Link
+            role="button"
+            href="/changelog"
+            onClick={() => { if (navigateTo) navigateTo('changelog'); setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'changelog' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Changelog
-          </button>
-          <button
-            onClick={() => { navigateTo('feedback'); setIsMobileMenuOpen(false); }}
+          </Link>
+          <Link
+            role="button"
+            href="/feedback"
+            onClick={() => { if (navigateTo) navigateTo('feedback'); setIsMobileMenuOpen(false); }}
             className={`block w-full text-left py-2 text-sm font-medium transition ${
               currentRoute === 'feedback' ? 'text-white font-semibold' : 'text-zinc-400 hover:text-white'
             }`}
           >
             Bug Reports & Feedback
-          </button>
+          </Link>
         </div>
       )}
     </nav>

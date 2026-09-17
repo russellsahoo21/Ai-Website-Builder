@@ -1,4 +1,4 @@
-﻿/**
+/**
  * integrationService.js
  * Production-ready Integration Management Service
  * Manages credentials, connection states, and health validation
@@ -276,41 +276,27 @@ export async function testIntegrationConnection(platformId, credentials = {}) {
     switch (platformId) {
       case 'github': {
         const token = credentials.token?.trim();
-        if (!token) throw new Error('GitHub token is required.');
-        
-        // If real token format
-        if (token.startsWith('ghp_') || token.startsWith('github_pat_')) {
-          try {
-            const res = await fetch('https://api.github.com/user', {
-              headers: {
-                Authorization: `token ${token}`,
-                Accept: 'application/vnd.github.v3+json'
-              }
-            });
-            const latency = Math.round(performance.now() - startTime);
-            if (res.ok) {
-              const data = await res.json();
-              return {
-                success: true,
-                message: `Connected to GitHub as @${data.login}`,
-                details: { username: data.login, avatarUrl: data.avatar_url, publicRepos: data.public_repos },
-                latency
-              };
-            } else if (res.status === 401) {
-              throw new Error('Invalid GitHub token. Please verify your token has "repo" scope.');
-            }
-          } catch (fetchErr) {
-            if (fetchErr.message.includes('Invalid')) throw fetchErr;
+        if (!token) throw new Error('GitHub personal access token is required.');
+
+        const res = await fetch('https://api.github.com/user', {
+          headers: {
+            Authorization: `token ${token}`,
+            Accept: 'application/vnd.github.v3+json',
+            'User-Agent': 'AetherCraft-Integration-Verifier'
           }
+        });
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok) {
+          const data = await res.json();
+          return {
+            success: true,
+            message: `Connected to GitHub as @${data.login}`,
+            details: { username: data.login, avatarUrl: data.avatar_url, publicRepos: data.public_repos },
+            latency
+          };
         }
-        // Sandbox fallback test for testing purposes
-        await new Promise(r => setTimeout(r, 600));
-        return {
-          success: true,
-          message: 'GitHub Verified (Test Sandbox)',
-          details: { username: 'developer-user', publicRepos: 12 },
-          latency: Math.round(performance.now() - startTime)
-        };
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `GitHub verification failed (HTTP ${res.status})`);
       }
 
       case 'supabase': {
@@ -319,89 +305,64 @@ export async function testIntegrationConnection(platformId, credentials = {}) {
         if (!url || !anonKey) throw new Error('Supabase URL and Anon Key are required.');
         if (!url.startsWith('https://')) throw new Error('Supabase URL must start with https://');
 
-        try {
-          const res = await fetch(`${url.replace(/\/$/, '')}/rest/v1/`, {
-            headers: {
-              apikey: anonKey,
-              Authorization: `Bearer ${anonKey}`
-            }
-          });
-          const latency = Math.round(performance.now() - startTime);
-          if (res.ok || res.status === 200 || res.status === 404) {
-            return {
-              success: true,
-              message: 'Supabase PostgreSQL & REST API Connected',
-              details: { endpoint: url },
-              latency
-            };
+        const cleanUrl = url.replace(/\/$/, '');
+        const res = await fetch(`${cleanUrl}/rest/v1/`, {
+          headers: {
+            apikey: anonKey,
+            Authorization: `Bearer ${anonKey}`
           }
-        } catch {}
-
-        await new Promise(r => setTimeout(r, 600));
-        return {
-          success: true,
-          message: 'Supabase Project Verified',
-          details: { endpoint: url },
-          latency: Math.round(performance.now() - startTime)
-        };
+        });
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok || res.status === 200 || res.status === 404) {
+          return {
+            success: true,
+            message: 'Supabase PostgreSQL & REST API Connected',
+            details: { endpoint: cleanUrl },
+            latency
+          };
+        }
+        throw new Error(`Supabase verification failed (HTTP ${res.status}). Please check your Project URL and Anon Key.`);
       }
 
       case 'vercel': {
         const token = credentials.token?.trim();
         if (!token) throw new Error('Vercel Access Token is required.');
 
-        try {
-          const res = await fetch('https://api.vercel.com/v2/user', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const latency = Math.round(performance.now() - startTime);
-          if (res.ok) {
-            const data = await res.json();
-            return {
-              success: true,
-              message: `Connected to Vercel account (${data.user?.username || data.user?.email || 'Active'})`,
-              details: { username: data.user?.username },
-              latency
-            };
-          }
-        } catch {}
-
-        await new Promise(r => setTimeout(r, 550));
-        return {
-          success: true,
-          message: 'Vercel Deployment API Verified',
-          details: { tier: 'Hobby/Pro' },
-          latency: Math.round(performance.now() - startTime)
-        };
+        const res = await fetch('https://api.vercel.com/v2/user', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok) {
+          const data = await res.json();
+          return {
+            success: true,
+            message: `Connected to Vercel account (@${data.user?.username || data.user?.email || 'Active'})`,
+            details: { username: data.user?.username, email: data.user?.email },
+            latency
+          };
+        }
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `Vercel token verification failed (HTTP ${res.status})`);
       }
 
       case 'netlify': {
         const token = credentials.token?.trim();
         if (!token) throw new Error('Netlify Access Token is required.');
 
-        try {
-          const res = await fetch('https://api.netlify.com/api/v1/user', {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          const latency = Math.round(performance.now() - startTime);
-          if (res.ok) {
-            const data = await res.json();
-            return {
-              success: true,
-              message: `Connected to Netlify (${data.full_name || data.email || 'Verified'})`,
-              details: { email: data.email },
-              latency
-            };
-          }
-        } catch {}
-
-        await new Promise(r => setTimeout(r, 500));
-        return {
-          success: true,
-          message: 'Netlify Pipeline Verified',
-          details: { tier: 'Standard' },
-          latency: Math.round(performance.now() - startTime)
-        };
+        const res = await fetch('https://api.netlify.com/api/v1/user', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok) {
+          const data = await res.json();
+          return {
+            success: true,
+            message: `Connected to Netlify (${data.full_name || data.email || 'Verified'})`,
+            details: { email: data.email, full_name: data.full_name },
+            latency
+          };
+        }
+        throw new Error(`Netlify verification failed (HTTP ${res.status}). Verify your Personal Access Token.`);
       }
 
       case 'stripe': {
@@ -411,13 +372,25 @@ export async function testIntegrationConnection(platformId, credentials = {}) {
         if (!pk.startsWith('pk_')) throw new Error('Publishable Key must start with pk_test_ or pk_live_');
         if (!sk.startsWith('sk_') && !sk.startsWith('rk_')) throw new Error('Secret Key must start with sk_ or rk_');
 
-        await new Promise(r => setTimeout(r, 650));
-        return {
-          success: true,
-          message: pk.startsWith('pk_test_') ? 'Stripe Connected (Test Mode)' : 'Stripe Connected (Live Mode)',
-          details: { mode: pk.startsWith('pk_test_') ? 'Test Sandbox' : 'Live Production' },
-          latency: Math.round(performance.now() - startTime)
-        };
+        // Test real credentials against Stripe balance endpoint
+        const res = await fetch('https://api.stripe.com/v1/balance', {
+          headers: {
+            Authorization: `Bearer ${sk}`
+          }
+        });
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok) {
+          const data = await res.json();
+          const isLive = data.livemode;
+          return {
+            success: true,
+            message: isLive ? 'Stripe Connected (Live Production Mode)' : 'Stripe Connected (Test Sandbox Mode)',
+            details: { livemode: isLive },
+            latency
+          };
+        }
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.error?.message || `Stripe secret key verification failed (HTTP ${res.status})`);
       }
 
       case 'resend': {
@@ -425,28 +398,20 @@ export async function testIntegrationConnection(platformId, credentials = {}) {
         if (!apiKey) throw new Error('Resend API Key is required.');
         if (!apiKey.startsWith('re_')) throw new Error('Resend API key must start with re_');
 
-        try {
-          const res = await fetch('https://api.resend.com/api-keys', {
-            headers: { Authorization: `Bearer ${apiKey}` }
-          });
-          const latency = Math.round(performance.now() - startTime);
-          if (res.ok) {
-            return {
-              success: true,
-              message: 'Resend Email API Connected',
-              details: { verified: true },
-              latency
-            };
-          }
-        } catch {}
-
-        await new Promise(r => setTimeout(r, 500));
-        return {
-          success: true,
-          message: 'Resend Email Gateway Verified',
-          details: { sender: credentials.senderEmail || 'onboarding@resend.dev' },
-          latency: Math.round(performance.now() - startTime)
-        };
+        const res = await fetch('https://api.resend.com/api-keys', {
+          headers: { Authorization: `Bearer ${apiKey}` }
+        });
+        const latency = Math.round(performance.now() - startTime);
+        if (res.ok) {
+          return {
+            success: true,
+            message: 'Resend Email API Connected & Verified',
+            details: { verified: true, sender: credentials.senderEmail || 'Verified Domain' },
+            latency
+          };
+        }
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err?.message || `Resend API key verification failed (HTTP ${res.status})`);
       }
 
       default:

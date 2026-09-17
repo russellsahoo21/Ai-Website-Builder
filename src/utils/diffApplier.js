@@ -1,4 +1,4 @@
-﻿/**
+/**
  * diffApplier.js
  * Resilient Search/Replace and Unified Diff Patch Engine.
  * Enables LLMs to emit surgical diffs (<50 tokens) instead of re-emitting 400+ lines of full files.

@@ -6,9 +6,11 @@
  */
 
 import { estimateTokens } from '../utils/tokenOptimizer.js';
+import { recordUserTokenUsage, fetchUserTokenUsage, isCloudDbConfigured } from './dbService.js';
 
 export { estimateTokens };
 export const FREE_TIER_MONTHLY_TOKEN_CAP = 100000;
+export const PRO_TIER_MONTHLY_TOKEN_CAP = 1000000;
 
 let currentUserId = null;
 
@@ -139,6 +141,13 @@ export function recordTokenUsage(tokens = 0, metadata = {}, userId = currentUser
     } catch (e) {}
   }
 
+  // Persist directly to Supabase Postgres user_token_usage
+  if (effectiveUser && effectiveUser !== 'guest' && isCloudDbConfigured()) {
+    recordUserTokenUsage(effectiveUser, current.period, tokens, current.total).catch(err => {
+      console.warn('[tokenService] Cloud quota sync notice:', err.message);
+    });
+  }
+
   const updated = {
     used: updatedUsed,
     total: current.total,
@@ -161,6 +170,47 @@ export function recordTokenUsage(tokens = 0, metadata = {}, userId = currentUser
 }
 
 /**
+ * Synchronize token usage with server / Supabase
+ */
+export async function syncTokenUsageWithServer(userId = currentUserId) {
+  if (typeof window === 'undefined') return getTokenUsage(userId);
+  const effectiveUser = userId || currentUserId;
+  if (!effectiveUser || effectiveUser === 'guest') return getTokenUsage(effectiveUser);
+
+  try {
+    const res = await fetch('/api/usage');
+    if (res.ok) {
+      const data = await res.json();
+      if (typeof data.used === 'number') {
+        const { usageKey, periodKey, period } = getStorageKeys(effectiveUser);
+        localStorage.setItem(periodKey, period);
+        localStorage.setItem(usageKey, String(data.used));
+
+        const updated = {
+          used: data.used,
+          total: data.total || FREE_TIER_MONTHLY_TOKEN_CAP,
+          remaining: data.remaining ?? Math.max(0, (data.total || FREE_TIER_MONTHLY_TOKEN_CAP) - data.used),
+          percent: data.percent ?? Math.min(100, Math.round((data.used / (data.total || FREE_TIER_MONTHLY_TOKEN_CAP)) * 100)),
+          period: data.period || period,
+          userId: effectiveUser,
+          plan: data.plan || 'free',
+        };
+
+        try {
+          window.dispatchEvent(new CustomEvent('tokenUsageUpdated', { detail: updated }));
+        } catch (e) {}
+
+        return updated;
+      }
+    }
+  } catch (err) {
+    // Graceful offline fallback
+  }
+
+  return getTokenUsage(effectiveUser);
+}
+
+/**
  * Checks if the user has sufficient quota for an upcoming generation.
  * @param {number} estimatedTokens
  * @param {boolean} isByok - If user provides their own API key, quota is bypassed
@@ -176,7 +226,7 @@ export function verifyTokenQuota(estimatedTokens = 1000, isByok = false, userId 
   if (usage.used >= usage.total) {
     return {
       allowed: false,
-      reason: `Monthly token limit of ${FREE_TIER_MONTHLY_TOKEN_CAP.toLocaleString()} reached. Please upgrade or provide your own API key in Settings.`,
+      reason: `Monthly token limit of ${usage.total.toLocaleString()} reached. Please upgrade or provide your own API key in Settings.`,
     };
   }
 

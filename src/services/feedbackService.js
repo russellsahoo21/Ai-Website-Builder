@@ -1,4 +1,4 @@
-﻿/**
+/**
  * feedbackService.js
  * Comprehensive client-side and cloud-synced Bug Reporting & Feedback Vault.
  * Features:

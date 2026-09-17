@@ -1,4 +1,4 @@
-﻿import { chromium } from 'playwright';
+import { chromium } from 'playwright';
 
 async function testAuth() {
   const browser = await chromium.launch({

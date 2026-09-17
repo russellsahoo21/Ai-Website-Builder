@@ -19,12 +19,16 @@ import ChatPanel from './components/ChatPanel';
 import PreviewPanel from './components/PreviewPanel';
 import CodeInspector from './components/CodeInspector';
 import SettingsModal from './components/SettingsModal';
+import VersionHistoryModal from './components/VersionHistoryModal';
+import ExportValidationModal from './components/ExportValidationModal';
 import { useUser, useClerk } from '@clerk/react';
 import { DEFAULT_MODEL, AVAILABLE_MODELS } from './services/aiService';
 import { useGeneration } from './hooks/useGeneration';
+import { useFileHistory } from './hooks/useFileHistory';
 import { useSandboxMessages } from './hooks/useSandboxMessages';
 import { STARTER_TEMPLATES } from './templates/starterTemplates';
 import { downloadProjectZip } from './utils/zipExporter';
+import { validateProjectBuild } from './utils/exportValidator';
 import { buildPreviewDoc } from './utils/previewBuilder';
 import { ensureStandardReactStructure } from './utils/projectStructure';
 import { 
@@ -38,10 +42,14 @@ import {
   setActiveProjectId, 
   deriveProjectName,
   setCurrentUserId,
-  syncProjectsWithCloud
+  syncProjectsWithCloud,
+  createProjectVersion,
+  getProjectVersions,
+  restoreProjectVersion,
+  deleteProjectVersion
 } from './services/projectService';
 import { setCurrentUserId as setTokenCurrentUserId } from './services/tokenService';
-import { syncUserProfile } from './services/dbService';
+import { syncUserProfile, fetchUserProfile } from './services/dbService';
 import { getSession } from './services/authService';
 
 function getAppRoute() {
@@ -114,15 +122,66 @@ export default function App({ initialRoute }) {
   });
 
   const [isGenerating, setIsGenerating] = useState(false);
+  const [userProfile, setUserProfile] = useState(null);
 
-  // Cloud Database Sync on Login
+  // — Phase 2: History & Modal states —
+  const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
+  const [isExportValidationOpen, setIsExportValidationOpen] = useState(false);
+  const [exportValidationResult, setExportValidationResult] = useState(null);
+
+  // Stable refs for hooks
+  const filesRef = useRef(files);
+  const messagesRef = useRef(messages);
+  const apiKeyRef = useRef(apiKey);
+  const selectedModelRef = useRef(selectedModel);
+  const activeProjectIdRef = useRef(activeProjectId);
+
+  useEffect(() => { filesRef.current = files; }, [files]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { apiKeyRef.current = apiKey; }, [apiKey]);
+  useEffect(() => { selectedModelRef.current = selectedModel; }, [selectedModel]);
+  useEffect(() => { activeProjectIdRef.current = activeProjectId; }, [activeProjectId]);
+
+  // File undo/redo history stack
+  const {
+    canUndo,
+    canRedo,
+    undo,
+    redo,
+    pushSnapshot,
+    clearHistory
+  } = useFileHistory(files, (restoredFiles) => {
+    setFiles(restoredFiles);
+    setRefreshTrigger(prev => prev + 1);
+  });
+
+  const onRefresh = useCallback(() => {
+    setRefreshTrigger(prev => prev + 1);
+    if (filesRef.current && Object.keys(filesRef.current).length > 0) {
+      pushSnapshot(filesRef.current, 'AI Synthesis Checkpoint');
+      if (activeProjectIdRef.current) {
+        const lastPrompt = messagesRef.current?.slice().reverse().find(m => m.role === 'user')?.content || '';
+        createProjectVersion(
+          activeProjectIdRef.current,
+          lastPrompt ? `Generated: ${lastPrompt.slice(0, 32)}...` : 'AI Synthesis Checkpoint',
+          filesRef.current,
+          lastPrompt
+        );
+        setProjects(getAllProjects());
+      }
+    }
+  }, [pushSnapshot]);
+
+  // Sync user profile & projects when auth state settles
   useEffect(() => {
     if (!isLoaded) return;
     if (isSignedIn && user?.id) {
       setCurrentUserId(user.id);
       setTokenCurrentUserId(user.id);
       setProjects(getAllProjects(user.id));
-      syncUserProfile(user);
+      syncUserProfile(user).then(prof => {
+        if (prof) setUserProfile(prof);
+      });
       syncProjectsWithCloud(user.id).then(syncedProjects => {
         if (syncedProjects && syncedProjects.length > 0) {
           setProjects(syncedProjects);
@@ -132,14 +191,16 @@ export default function App({ initialRoute }) {
             setActiveProjectIdState(active.id);
             setFiles(active.files || {});
             setMessages(active.messages || []);
+            clearHistory(active.files || {});
           }
         }
       });
     } else {
       setCurrentUserId(null);
       setTokenCurrentUserId(null);
+      setUserProfile(null);
     }
-  }, [isLoaded, isSignedIn, user?.id]);
+  }, [isLoaded, isSignedIn, user?.id, clearHistory]);
 
   // Auto-save active project changes to localStorage & Cloud (debounced)
   useEffect(() => {
@@ -163,19 +224,6 @@ export default function App({ initialRoute }) {
 
     return () => clearTimeout(timer);
   }, [files, messages, activeProjectId]);
-
-  // Stable refs for hooks
-  const filesRef = useRef(files);
-  const messagesRef = useRef(messages);
-  const apiKeyRef = useRef(apiKey);
-  const selectedModelRef = useRef(selectedModel);
-
-  useEffect(() => { filesRef.current = files; }, [files]);
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
-  useEffect(() => { apiKeyRef.current = apiKey; }, [apiKey]);
-  useEffect(() => { selectedModelRef.current = selectedModel; }, [selectedModel]);
-
-  const onRefresh = useCallback(() => setRefreshTrigger(prev => prev + 1), []);
 
   // — Generation hook —
   const { handleSendMessage, handleCancelGeneration, executeAutoFix, autoFixCountRef, telemetry } = useGeneration({
@@ -236,6 +284,13 @@ export default function App({ initialRoute }) {
     }
   }, [isSignedIn, isLoaded, currentRoute]);
 
+  // If user visits studio while not signed in, redirect directly to login
+  useEffect(() => {
+    if (isLoaded && !isSignedIn && currentRoute === 'studio') {
+      navigateTo('login');
+    }
+  }, [isSignedIn, isLoaded, currentRoute]);
+
   const navigateTo = (route, params = {}) => {
     if ((route === 'studio' || route === 'dashboard') && !isSignedIn) { 
       navigateTo('login'); 
@@ -266,6 +321,7 @@ export default function App({ initialRoute }) {
     setActiveProjectId(project.id);
     setFiles(project.files || {});
     setMessages(project.messages || []);
+    clearHistory(project.files || {});
     setRefreshTrigger(prev => prev + 1);
   };
 
@@ -273,7 +329,7 @@ export default function App({ initialRoute }) {
   const MAX_PRO_PROJECTS = 50;
 
   const checkProjectQuota = () => {
-    const userPlan = localStorage.getItem('aethercraft_user_plan') || 'free';
+    const userPlan = userProfile?.plan || 'free';
     if (userPlan === 'enterprise' || userPlan === 'studio' || userPlan === 'unlimited') {
       return true;
     }
@@ -371,8 +427,10 @@ export default function App({ initialRoute }) {
     setProjects(getAllProjects());
     setActiveProjectIdState(newProj.id);
     setActiveProjectId(newProj.id);
-    setFiles(newProj.files || template.files || {});
+    const initialFiles = newProj.files || template.files || {};
+    setFiles(initialFiles);
     setMessages([{ role: 'ai', content: `Template loaded: "${template.name}". Inspect code or submit instructions to refine.` }]);
+    clearHistory(initialFiles);
     if (!isSignedIn) { navigateTo('login'); return; }
     navigateTo('studio');
     setRefreshTrigger(prev => prev + 1);
@@ -381,16 +439,25 @@ export default function App({ initialRoute }) {
   const handleClearWorkspace = () => {
     setFiles({});
     setMessages([]);
+    clearHistory({});
     setRefreshTrigger(prev => prev + 1);
   };
 
   const handleFileUpdate = (filename, newContent) => {
-    setFiles(prev => ({ ...prev, [filename]: newContent }));
+    setFiles(prev => {
+      const next = { ...prev, [filename]: newContent };
+      pushSnapshot(next, `Edited ${filename}`);
+      return next;
+    });
     setRefreshTrigger(prev => prev + 1);
   };
 
   const handleFileCreate = (filename, initialContent = '') => {
-    setFiles(prev => ({ ...prev, [filename]: initialContent }));
+    setFiles(prev => {
+      const next = { ...prev, [filename]: initialContent };
+      pushSnapshot(next, `Created ${filename}`);
+      return next;
+    });
     setRefreshTrigger(prev => prev + 1);
   };
 
@@ -398,9 +465,37 @@ export default function App({ initialRoute }) {
     setFiles(prev => {
       const next = { ...prev };
       delete next[filename];
+      pushSnapshot(next, `Deleted ${filename}`);
       return next;
     });
     setRefreshTrigger(prev => prev + 1);
+  };
+
+  const handleRestoreVersion = (version) => {
+    if (!version || !version.files || !activeProjectId) return;
+    const res = restoreProjectVersion(activeProjectId, version.id);
+    if (res?.project) {
+      setFiles(res.project.files);
+      pushSnapshot(res.project.files, `Restored: ${version.label}`);
+      setProjects(getAllProjects());
+      setRefreshTrigger(prev => prev + 1);
+    }
+  };
+
+  const handleDeleteVersion = (versionId) => {
+    if (!activeProjectId || !versionId) return;
+    deleteProjectVersion(activeProjectId, versionId);
+    setProjects(getAllProjects());
+  };
+
+  const handleDownloadZip = () => {
+    const validation = validateProjectBuild(files);
+    if (!validation.isValid || validation.errors.length > 0 || (validation.warnings && validation.warnings.length > 0)) {
+      setExportValidationResult(validation);
+      setIsExportValidationOpen(true);
+      return;
+    }
+    downloadProjectZip(files, activeProject?.name || 'aethercraft-app');
   };
 
   const handleOpenNewTab = () => {
@@ -469,13 +564,19 @@ export default function App({ initialRoute }) {
           setViewport={setViewport}
           onRefresh={() => setRefreshTrigger(prev => prev + 1)}
           onOpenNewTab={handleOpenNewTab}
-          onDownloadZip={() => downloadProjectZip(files, activeProject?.name || 'aethercraft-app')}
+          onDownloadZip={handleDownloadZip}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onOpenProjects={() => navigateTo('dashboard')}
           projectCount={projects.length}
           activeProjectName={activeProject?.name || ''}
           onBackToHome={() => navigateTo('landing')}
           isGenerating={isGenerating}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={undo}
+          onRedo={redo}
+          onOpenVersionHistory={() => setIsVersionHistoryOpen(true)}
+          versionCount={getProjectVersions(activeProjectId).length}
         />
 
         <div className="flex-1 flex overflow-hidden">
@@ -487,6 +588,7 @@ export default function App({ initialRoute }) {
             isGenerating={isGenerating}
             onCancelGeneration={handleCancelGeneration}
             selectedModel={selectedModel}
+            telemetry={telemetry}
             onSelectModel={(modelId) => {
               setSelectedModel(modelId);
               if (typeof window !== 'undefined') {
@@ -506,6 +608,8 @@ export default function App({ initialRoute }) {
                 telemetry={telemetry}
                 onCancel={handleCancelGeneration}
                 promptText={messages.slice().reverse().find(m => m.role === 'user')?.content || ''}
+                onAutoFix={(err) => executeAutoFix(err, true)}
+                onViewCode={() => setActiveTab('code')}
               />
             ) : (
               <CodeInspector
@@ -513,10 +617,31 @@ export default function App({ initialRoute }) {
                 onFileUpdate={handleFileUpdate}
                 onFileCreate={handleFileCreate}
                 onFileDelete={handleFileDelete}
+                canUndo={canUndo}
+                canRedo={canRedo}
+                onUndo={undo}
+                onRedo={redo}
               />
             )}
           </div>
         </div>
+
+        <VersionHistoryModal
+          isOpen={isVersionHistoryOpen}
+          onClose={() => setIsVersionHistoryOpen(false)}
+          versions={getProjectVersions(activeProjectId)}
+          activeProjectName={activeProject?.name || ''}
+          onRestoreVersion={handleRestoreVersion}
+          onDeleteVersion={handleDeleteVersion}
+        />
+
+        <ExportValidationModal
+          isOpen={isExportValidationOpen}
+          onClose={() => setIsExportValidationOpen(false)}
+          validationResult={exportValidationResult}
+          onConfirmExport={() => downloadProjectZip(files, activeProject?.name || 'aethercraft-app')}
+          onAutoFix={(err) => executeAutoFix(err, true)}
+        />
 
         <SettingsModal
           isOpen={isSettingsOpen}
@@ -559,6 +684,7 @@ export default function App({ initialRoute }) {
           setApiKey={setApiKey}
           selectedModel={selectedModel}
           setSelectedModel={setSelectedModel}
+          userProfile={userProfile}
         />
 
         <SettingsModal
@@ -614,10 +740,12 @@ export default function App({ initialRoute }) {
             initialBillingCycle={checkoutCycle}
             returnRoute={returnRoute}
             navigateTo={navigateTo}
+            user={user}
+            onPlanUpdated={(newPlan) => setUserProfile(prev => ({ ...(prev || {}), plan: newPlan }))}
           />
         )}
-        {(currentRoute === 'login' || currentRoute === 'signup') && (
-          <AuthPage mode={currentRoute} navigateTo={navigateTo} />
+        {(currentRoute === 'login' || currentRoute === 'signup' || (currentRoute === 'studio' && !isSignedIn)) && (
+          <AuthPage mode={currentRoute === 'signup' ? 'signup' : 'login'} navigateTo={navigateTo} />
         )}
       </main>
 

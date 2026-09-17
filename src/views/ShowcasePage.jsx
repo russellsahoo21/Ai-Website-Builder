@@ -1,5 +1,6 @@
-﻿"use client";
+"use client";
 import React from 'react';
+import Link from 'next/link';
 import { Award, ExternalLink, ArrowRight, Heart, Sparkles } from 'lucide-react';
 import { useUser, SignUpButton } from '@clerk/react';
 import { STARTER_TEMPLATES } from '../templates/starterTemplates';
@@ -61,13 +62,20 @@ export default function ShowcasePage({ onLoadTemplate, navigateTo }) {
                 Created by <span className="text-white font-medium">{tmpl.author}</span>
               </div>
               {(!isLoaded || !isSignedIn) ? (
-                <button
-                  onClick={() => navigateTo('signup')}
+                <Link
+                  role="button"
+                  href="/signup"
+                  onClick={(e) => {
+                    if (navigateTo) {
+                      e.preventDefault();
+                      navigateTo('signup');
+                    }
+                  }}
                   className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:opacity-90 text-white text-xs font-bold transition shadow-lg shadow-indigo-600/25 cursor-pointer"
                 >
                   <span>Clone & Edit Project</span>
                   <ArrowRight className="w-3.5 h-3.5" />
-                </button>
+                </Link>
               ) : (
                 <button
                   onClick={() => onLoadTemplate(tmpl)}
@@ -89,12 +97,19 @@ export default function ShowcasePage({ onLoadTemplate, navigateTo }) {
           Build something amazing in the Studio, click Export, and submit your project to join over 500 featured community apps.
         </p>
         {(!isLoaded || !isSignedIn) ? (
-          <button
-            onClick={() => navigateTo('signup')}
-            className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition cursor-pointer"
+          <Link
+            role="button"
+            href="/signup"
+            onClick={(e) => {
+              if (navigateTo) {
+                e.preventDefault();
+                navigateTo('signup');
+              }
+            }}
+            className="px-6 py-3 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-semibold transition cursor-pointer inline-block"
           >
             Start Building Your App
-          </button>
+          </Link>
         ) : (
           <button
             onClick={() => navigateTo('studio')}

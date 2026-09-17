@@ -22,8 +22,8 @@ const isPublicRoute = createRouteMatcher([
 
 const isAuthRoute = createRouteMatcher(["/login(.*)", "/signup(.*)"]);
 
-export default clerkMiddleware((auth, request) => {
-  const { userId } = auth();
+export const proxy = clerkMiddleware(async (auth, request) => {
+  const { userId } = await auth();
 
   // If user is already authenticated and visits /login or /signup, redirect immediately to dashboard or redirect_url
   if (userId && isAuthRoute(request)) {
@@ -44,7 +44,7 @@ export default clerkMiddleware((auth, request) => {
   }
 
   if (!isPublicRoute(request)) {
-    auth().protect();
+    await auth.protect();
   }
 });
 
@@ -54,3 +54,5 @@ export const config = {
     "/(api|trpc)(.*)",
   ],
 };
+
+export default proxy;

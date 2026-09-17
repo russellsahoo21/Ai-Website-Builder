@@ -1,5 +1,6 @@
-﻿"use client";
+"use client";
 import React from 'react';
+import Link from 'next/link';
 
 export default function Footer({ navigateTo }) {
   return (
@@ -18,19 +19,19 @@ export default function Footer({ navigateTo }) {
         <div>
           <div className="font-semibold text-zinc-300 text-xs mb-3">Product</div>
           <ul className="space-y-2">
-            <li><button onClick={() => navigateTo('landing')} className="hover:text-zinc-300 transition">Home</button></li>
-            <li><button onClick={() => navigateTo('templates')} className="hover:text-zinc-300 transition">Templates</button></li>
-            <li><button onClick={() => navigateTo('showcase')} className="hover:text-zinc-300 transition">Showcase</button></li>
-            <li><button onClick={() => navigateTo('integrations')} className="hover:text-zinc-300 transition">Integrations</button></li>
+            <li><Link href="/" onClick={() => navigateTo && navigateTo('landing')} className="hover:text-zinc-300 transition">Home</Link></li>
+            <li><Link href="/templates" onClick={() => navigateTo && navigateTo('templates')} className="hover:text-zinc-300 transition">Templates</Link></li>
+            <li><Link href="/showcase" onClick={() => navigateTo && navigateTo('showcase')} className="hover:text-zinc-300 transition">Showcase</Link></li>
+            <li><Link href="/integrations" onClick={() => navigateTo && navigateTo('integrations')} className="hover:text-zinc-300 transition">Integrations</Link></li>
           </ul>
         </div>
 
         <div>
           <div className="font-semibold text-zinc-300 text-xs mb-3">Resources</div>
           <ul className="space-y-2">
-            <li><button onClick={() => navigateTo('docs')} className="hover:text-zinc-300 transition">Documentation</button></li>
-            <li><button onClick={() => navigateTo('changelog')} className="hover:text-zinc-300 transition">Changelog</button></li>
-            <li><button onClick={() => navigateTo('pricing')} className="hover:text-zinc-300 transition">Pricing</button></li>
+            <li><Link href="/docs" onClick={() => navigateTo && navigateTo('docs')} className="hover:text-zinc-300 transition">Documentation</Link></li>
+            <li><Link href="/changelog" onClick={() => navigateTo && navigateTo('changelog')} className="hover:text-zinc-300 transition">Changelog</Link></li>
+            <li><Link href="/pricing" onClick={() => navigateTo && navigateTo('pricing')} className="hover:text-zinc-300 transition">Pricing</Link></li>
           </ul>
         </div>
 

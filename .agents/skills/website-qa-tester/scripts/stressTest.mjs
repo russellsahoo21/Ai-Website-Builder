@@ -1,4 +1,4 @@
-﻿import { chromium } from 'playwright';
+import { chromium } from 'playwright';
 
 const BASE_URL = 'http://localhost:5173';
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe';

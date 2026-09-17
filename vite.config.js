@@ -14,5 +14,12 @@ export default defineConfig({
         rewrite: (path) => path.replace(/^\/api\/nvidia/, ''),
       }
     }
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    pool: 'forks',
+    setupFiles: ['./tests/setup.js'],
+    include: ['tests/components/**/*.test.{js,jsx}'],
   }
 })

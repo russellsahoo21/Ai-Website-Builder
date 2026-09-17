@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   FileCode, 
@@ -25,7 +25,9 @@ import {
   X,
   FilePlus,
   Layers,
-  GitBranch
+  GitBranch,
+  Undo2,
+  Redo2
 } from 'lucide-react';
 
 // Get appropriate icon & color for each file type
@@ -60,7 +62,16 @@ function getLanguageLabel(filename) {
   return 'Plain Text';
 }
 
-export default function CodeInspector({ files = {}, onFileUpdate, onFileCreate, onFileDelete }) {
+export default function CodeInspector({ 
+  files = {}, 
+  onFileUpdate, 
+  onFileCreate, 
+  onFileDelete,
+  canUndo = false,
+  canRedo = false,
+  onUndo,
+  onRedo
+}) {
   const fileNames = Object.keys(files);
   const defaultAppFile = fileNames.includes('src/App.jsx') 
     ? 'src/App.jsx' 
@@ -73,7 +84,9 @@ export default function CodeInspector({ files = {}, onFileUpdate, onFileCreate, 
     return fileNames.length > 0 ? [defaultAppFile] : ['src/App.jsx'];
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [sidebarMode, setSidebarMode] = useState('explorer'); // 'explorer' | 'search'
   const [searchQuery, setSearchQuery] = useState('');
+  const [contentSearchQuery, setContentSearchQuery] = useState('');
   const [isCreatingFile, setIsCreatingFile] = useState(false);
   const [newFileName, setNewFileName] = useState('');
   const [copied, setCopied] = useState(false);
@@ -82,6 +95,34 @@ export default function CodeInspector({ files = {}, onFileUpdate, onFileCreate, 
   
   const textareaRef = useRef(null);
   const newFileInputRef = useRef(null);
+
+  // Global content search results across all files in workspace
+  const contentSearchResults = useMemo(() => {
+    if (!contentSearchQuery.trim()) return [];
+    const q = contentSearchQuery.toLowerCase();
+    const results = [];
+    for (const [filePath, fileContent] of Object.entries(files)) {
+      if (typeof fileContent !== 'string') continue;
+      const lines = fileContent.split('\n');
+      const matchesInFile = [];
+      lines.forEach((lineText, idx) => {
+        if (lineText.toLowerCase().includes(q)) {
+          matchesInFile.push({
+            lineNumber: idx + 1,
+            lineText: lineText.trim()
+          });
+        }
+      });
+      if (matchesInFile.length > 0) {
+        results.push({
+          filePath,
+          fileName: filePath.split('/').pop(),
+          matches: matchesInFile
+        });
+      }
+    }
+    return results;
+  }, [files, contentSearchQuery]);
 
   // Synchronize active file if files change
   useEffect(() => {
@@ -359,19 +400,43 @@ export default function CodeInspector({ files = {}, onFileUpdate, onFileCreate, 
     <div className="w-full h-full flex bg-[#090b10] text-zinc-200 overflow-hidden font-sans select-none">
       {/* ── Left Thin Activity Bar (VS Code style) ── */}
       <div className="w-11 bg-[#07090e] border-r border-zinc-800/80 flex flex-col items-center justify-between py-3 shrink-0">
-        <div className="flex flex-col items-center gap-3">
+        <div className="flex flex-col items-center gap-2">
           <button
-            onClick={() => setIsSidebarOpen(prev => !prev)}
+            onClick={() => {
+              if (isSidebarOpen && sidebarMode === 'explorer') {
+                setIsSidebarOpen(false);
+              } else {
+                setIsSidebarOpen(true);
+                setSidebarMode('explorer');
+              }
+            }}
             className={`p-2 rounded-md transition ${
-              isSidebarOpen ? 'text-cyan-400 bg-zinc-800/60' : 'text-zinc-500 hover:text-zinc-300'
+              isSidebarOpen && sidebarMode === 'explorer' ? 'text-cyan-400 bg-zinc-800/60' : 'text-zinc-500 hover:text-zinc-300'
             }`}
-            title="Toggle Explorer Sidebar (Ctrl+B)"
+            title="File Explorer (Ctrl+Shift+E)"
           >
             <Layers className="w-4 h-4" />
           </button>
           <button
             onClick={() => {
+              if (isSidebarOpen && sidebarMode === 'search') {
+                setIsSidebarOpen(false);
+              } else {
+                setIsSidebarOpen(true);
+                setSidebarMode('search');
+              }
+            }}
+            className={`p-2 rounded-md transition ${
+              isSidebarOpen && sidebarMode === 'search' ? 'text-cyan-400 bg-zinc-800/60' : 'text-zinc-500 hover:text-zinc-300'
+            }`}
+            title="Search Across Files (Ctrl+Shift+F)"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+          <button
+            onClick={() => {
               setIsSidebarOpen(true);
+              setSidebarMode('explorer');
               setIsCreatingFile(true);
             }}
             className="p-2 rounded-md text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/40 transition"
@@ -386,106 +451,191 @@ export default function CodeInspector({ files = {}, onFileUpdate, onFileCreate, 
         </div>
       </div>
 
-      {/* ── Collapsible Explorer Sidebar (VS Code style) ── */}
+      {/* ── Collapsible Sidebar: Explorer OR Global File Search ── */}
       {isSidebarOpen && (
-        <div className="w-60 md:w-64 bg-[#0a0c12] border-r border-zinc-800/80 flex flex-col shrink-0 animate-fadeIn overflow-hidden">
-          {/* Explorer Header */}
-          <div className="p-2.5 border-b border-zinc-800/80 flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-zinc-400 tracking-wider uppercase font-mono">
-              Explorer
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setIsCreatingFile(true)}
-                className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
-                title="New File..."
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setCollapsedFolders({})}
-                className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
-                title="Expand All"
-              >
-                <RotateCcw className="w-3 h-3" />
-              </button>
-              <button
-                onClick={() => setIsSidebarOpen(false)}
-                className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition md:hidden"
-                title="Close Explorer"
-              >
-                <PanelLeftClose className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
+        <div className="w-64 md:w-72 bg-[#0a0c12] border-r border-zinc-800/80 flex flex-col shrink-0 animate-fadeIn overflow-hidden">
+          {sidebarMode === 'explorer' ? (
+            <>
+              {/* Explorer Header */}
+              <div className="p-2.5 border-b border-zinc-800/80 flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-zinc-400 tracking-wider uppercase font-mono">
+                  Explorer
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => setIsCreatingFile(true)}
+                    className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                    title="New File..."
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setCollapsedFolders({})}
+                    className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition"
+                    title="Expand All"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                  </button>
+                  <button
+                    onClick={() => setIsSidebarOpen(false)}
+                    className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition md:hidden"
+                    title="Close Explorer"
+                  >
+                    <PanelLeftClose className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
 
-          {/* Quick Filter Search */}
-          <div className="px-2 py-1.5 border-b border-zinc-800/60">
-            <div className="relative flex items-center">
-              <Search className="w-3 h-3 text-zinc-500 absolute left-2 pointer-events-none" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Filter files..."
-                className="w-full pl-6 pr-2 py-1 bg-zinc-900/80 border border-zinc-800 rounded text-[11px] font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-700 transition"
-              />
-              {searchQuery && (
-                <button 
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-1.5 text-zinc-500 hover:text-zinc-300"
+              {/* Quick Filter Search */}
+              <div className="px-2 py-1.5 border-b border-zinc-800/60">
+                <div className="relative flex items-center">
+                  <Search className="w-3 h-3 text-zinc-500 absolute left-2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Filter files..."
+                    className="w-full pl-6 pr-2 py-1 bg-zinc-900/80 border border-zinc-800 rounded text-[11px] font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-zinc-700 transition"
+                  />
+                  {searchQuery && (
+                    <button 
+                      onClick={() => setSearchQuery('')}
+                      className="absolute right-1.5 text-zinc-500 hover:text-zinc-300"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Project Structure Section */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
+                <div className="flex items-center justify-between px-1 py-1 text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold mb-1">
+                  <span>PROJECT // FILES</span>
+                  <span className="bg-zinc-800/80 px-1.5 py-0.2 rounded text-[9px] text-zinc-400">
+                    {fileNames.length}
+                  </span>
+                </div>
+
+                {/* Inline New File Creator */}
+                {isCreatingFile && (
+                  <form onSubmit={handleCreateFileSubmit} className="p-1 mb-1 bg-zinc-900/90 border border-cyan-500/40 rounded-md">
+                    <div className="flex items-center gap-1.5">
+                      <FileCode className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                      <input
+                        ref={newFileInputRef}
+                        type="text"
+                        value={newFileName}
+                        onChange={(e) => setNewFileName(e.target.value)}
+                        placeholder="components/Header.jsx"
+                        className="w-full bg-transparent text-xs font-mono text-white placeholder-zinc-600 focus:outline-none"
+                      />
+                    </div>
+                  </form>
+                )}
+
+                {/* Render Folders & Files */}
+                {Object.values(fileTree.folders).map(folder => renderFolder(folder, 0))}
+                {fileTree.files.map(file => renderFileItem(file, 0))}
+              </div>
+
+              {/* Explorer Bottom Meta */}
+              <div className="p-2 border-t border-zinc-800/80 bg-[#07090e] text-[10px] font-mono text-zinc-500 flex items-center justify-between">
+                <span>Modular Workspace</span>
+                <span className="text-cyan-400">React 18</span>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Search in Files Header */}
+              <div className="p-2.5 border-b border-zinc-800/80 flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-zinc-400 tracking-wider uppercase font-mono">
+                  Search in Files
+                </span>
+                <button
+                  onClick={() => setIsSidebarOpen(false)}
+                  className="p-1 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 transition md:hidden"
+                  title="Close Search"
                 >
-                  <X className="w-3 h-3" />
+                  <PanelLeftClose className="w-3.5 h-3.5" />
                 </button>
-              )}
-            </div>
-          </div>
+              </div>
 
-          {/* Project Structure Section */}
-          <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
-            <div className="flex items-center justify-between px-1 py-1 text-[10px] font-mono uppercase tracking-wider text-zinc-500 font-semibold mb-1">
-              <span>PROJECT // FILES</span>
-              <span className="bg-zinc-800/80 px-1.5 py-0.2 rounded text-[9px] text-zinc-400">
-                {fileNames.length}
-              </span>
-            </div>
-
-            {/* Inline New File Creator */}
-            {isCreatingFile && (
-              <form onSubmit={handleCreateFileSubmit} className="mb-2 p-1.5 bg-zinc-900 rounded border border-cyan-500/50">
-                <div className="text-[10px] font-mono text-cyan-400 mb-1 flex items-center gap-1">
-                  <Plus className="w-2.5 h-2.5" /> New File (e.g. components/Header.jsx)
+              {/* Search Input Box */}
+              <div className="p-2 border-b border-zinc-800/60">
+                <div className="relative flex items-center">
+                  <Search className="w-3 h-3 text-zinc-500 absolute left-2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={contentSearchQuery}
+                    onChange={(e) => setContentSearchQuery(e.target.value)}
+                    placeholder="Search across all files..."
+                    className="w-full pl-6 pr-2 py-1 bg-zinc-900/80 border border-zinc-800 rounded text-[11px] font-mono text-zinc-200 placeholder-zinc-600 focus:outline-none focus:border-cyan-500/50 transition"
+                    autoFocus
+                  />
+                  {contentSearchQuery && (
+                    <button 
+                      onClick={() => setContentSearchQuery('')}
+                      className="absolute right-1.5 text-zinc-500 hover:text-zinc-300"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
-                <input
-                  ref={newFileInputRef}
-                  type="text"
-                  value={newFileName}
-                  onChange={(e) => setNewFileName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') {
-                      setIsCreatingFile(false);
-                      setNewFileName('');
-                    }
-                  }}
-                  placeholder="components/Button.jsx"
-                  className="w-full px-2 py-1 bg-black border border-zinc-700 rounded text-xs font-mono text-white focus:outline-none focus:border-cyan-400"
-                />
-                <div className="flex items-center justify-between mt-1 text-[9px] font-mono text-zinc-500">
-                  <span>Enter to save • Esc to cancel</span>
-                </div>
-              </form>
-            )}
+                {contentSearchQuery && (
+                  <div className="text-[10px] font-mono text-zinc-500 mt-1.5 px-0.5">
+                    {contentSearchResults.reduce((acc, r) => acc + r.matches.length, 0)} match(es) in {contentSearchResults.length} file(s)
+                  </div>
+                )}
+              </div>
 
-            {/* Render Folders & Files */}
-            {Object.values(fileTree.folders).map(folder => renderFolder(folder, 0))}
-            {fileTree.files.map(file => renderFileItem(file, 0))}
-          </div>
-
-          {/* Explorer Bottom Meta */}
-          <div className="p-2 border-t border-zinc-800/80 bg-[#07090e] text-[10px] font-mono text-zinc-500 flex items-center justify-between">
-            <span>Modular Workspace</span>
-            <span className="text-cyan-400">React 18</span>
-          </div>
+              {/* Search Results List */}
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                {!contentSearchQuery ? (
+                  <div className="text-center py-10 px-3 text-zinc-600 font-mono text-[11px]">
+                    Type a query to search across all code files in the project.
+                  </div>
+                ) : contentSearchResults.length === 0 ? (
+                  <div className="text-center py-10 px-3 text-zinc-500 font-mono text-[11px]">
+                    No matching lines found.
+                  </div>
+                ) : (
+                  contentSearchResults.map((res) => (
+                    <div key={res.filePath} className="rounded-lg bg-zinc-900/40 border border-zinc-800/80 overflow-hidden">
+                      <div 
+                        onClick={() => handleSelectFile(res.filePath)}
+                        className="px-2 py-1 bg-zinc-900/90 border-b border-zinc-800/60 text-[11px] font-mono font-medium text-cyan-400 flex items-center justify-between cursor-pointer hover:bg-zinc-800/60 transition"
+                      >
+                        <div className="flex items-center gap-1.5 truncate">
+                          {getFileIcon(res.fileName)}
+                          <span className="truncate">{res.filePath}</span>
+                        </div>
+                        <span className="text-[9px] text-zinc-500 bg-zinc-800 px-1.5 py-0.2 rounded font-mono">
+                          {res.matches.length}
+                        </span>
+                      </div>
+                      <div className="divide-y divide-zinc-850">
+                        {res.matches.slice(0, 10).map((m, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => handleSelectFile(res.filePath)}
+                            className="px-2.5 py-1 text-[10px] font-mono text-zinc-400 hover:text-white hover:bg-zinc-800/50 cursor-pointer transition flex items-start gap-2 group"
+                          >
+                            <span className="text-zinc-600 group-hover:text-cyan-400 shrink-0 select-none">
+                              L{m.lineNumber}:
+                            </span>
+                            <span className="truncate flex-1">
+                              {m.lineText}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -533,6 +683,28 @@ export default function CodeInspector({ files = {}, onFileUpdate, onFileCreate, 
 
           {/* Action Tools */}
           <div className="flex items-center gap-1.5 pl-2">
+            {onUndo && (
+              <button
+                onClick={onUndo}
+                disabled={!canUndo}
+                className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 border border-zinc-800 text-zinc-300 hover:text-white transition cursor-pointer disabled:cursor-not-allowed"
+                title="Undo file changes (Ctrl+Z)"
+              >
+                <Undo2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+
+            {onRedo && (
+              <button
+                onClick={onRedo}
+                disabled={!canRedo}
+                className="p-1 rounded bg-zinc-900 hover:bg-zinc-800 disabled:opacity-30 border border-zinc-800 text-zinc-300 hover:text-white transition cursor-pointer disabled:cursor-not-allowed"
+                title="Redo file changes (Ctrl+Y)"
+              >
+                <Redo2 className="w-3.5 h-3.5" />
+              </button>
+            )}
+
             <span className="text-[11px] font-mono text-emerald-400/90 hidden lg:flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-950/30 border border-emerald-800/40">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
               Live Editable

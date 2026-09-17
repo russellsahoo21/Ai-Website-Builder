@@ -53,9 +53,47 @@ export function buildPreviewDoc(files, options = {}) {
       cl = cl.replace(/import\s+type\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
       cl = cl.replace(/import\s+type\s*\{[\s\S]*?\}\s*from\s+['"\\].*?['"\\];?/g, '// [type import stripped]');
 
+      // 1a. Combined default and named imports: import React, { useState, useMemo } from 'react'
+      cl = cl.replace(/import\s+([A-Za-z0-9_]+)\s*,\s*\{([\s\S]*?)\}\s*from\s+['"\\].*?['"\\];?/g, (match, defaultName, namedVars) => {
+        let res = '';
+        if (defaultName) {
+          if (defaultName === 'React') {
+            res += `var React = (typeof window !== 'undefined' && window.React) ? window.React : (typeof React !== 'undefined' ? React : {});\n      `;
+          } else if (/^[A-Z]/.test(defaultName)) {
+            res += `var ${defaultName} = window['${defaultName}'] || (() => null);\n      `;
+          } else {
+            res += `var ${defaultName} = window['${defaultName}'] || "";\n      `;
+          }
+        }
+        if (namedVars) {
+          const declarations = namedVars.split(',').map(v => {
+            const parts = v.trim().split(/\s+as\s+/);
+            const name = (parts[1] || parts[0]).trim();
+            if (!name || name === 'default') return '';
+            if (name.startsWith('use')) {
+              return `var ${name} = (window.React && window.React['${name}']) || window['${name}'] || (typeof React !== 'undefined' ? React['${name}'] : (() => null));`;
+            }
+            if (/^[A-Z]/.test(name)) {
+              return `var ${name} = window['${name}'] || LucideProxy['${name}'] || (() => null);`;
+            }
+            return `var ${name} = window['${name}'] || "";`;
+          }).filter(Boolean).join('\n      ');
+          res += declarations;
+        }
+        return res;
+      });
+
+      // 1a-2. Namespace imports: import * as Lucide from 'lucide-react'
+      cl = cl.replace(/import\s*\*\s*as\s+([A-Za-z0-9_]+)\s+from\s+['"\\].*?['"\\];?/g, (match, varName) => {
+        return `var ${varName} = window['${varName}'] || LucideProxy || {};`;
+      });
+
       // 1b. Shim default asset and component imports so variables are never undefined in JSX
       // e.g. import reactLogo from './assets/react.svg' -> var reactLogo = window['reactLogo'] || "https://images.unsplash.com/...";
       cl = cl.replace(/import\s+([A-Za-z0-9_]+)\s+from\s+['"\\].*?['"\\];?/g, (match, varName) => {
+        if (varName === 'React') {
+          return `var React = (typeof window !== 'undefined' && window.React) ? window.React : (typeof React !== 'undefined' ? React : {});`;
+        }
         if (/^[A-Z]/.test(varName)) {
           return `var ${varName} = window['${varName}'] || (() => null);`;
         }
@@ -68,6 +106,9 @@ export function buildPreviewDoc(files, options = {}) {
           const parts = v.trim().split(/\s+as\s+/);
           const name = (parts[1] || parts[0]).trim();
           if (!name || name === 'default') return '';
+          if (name.startsWith('use')) {
+            return `var ${name} = (window.React && window.React['${name}']) || window['${name}'] || (typeof React !== 'undefined' ? React['${name}'] : (() => null));`;
+          }
           if (/^[A-Z]/.test(name)) {
             return `var ${name} = window['${name}'] || LucideProxy['${name}'] || (() => null);`;
           }
@@ -78,6 +119,10 @@ export function buildPreviewDoc(files, options = {}) {
 
       // 1d. Strip side-effect imports
       cl = cl.replace(/import\s+['"\\].*?['"\\];?/g, '// [side-effect import resolved]');
+
+      // 1e. Fallback shim for any leftover import statements to prevent "import outside module" errors
+      cl = cl.replace(/import\s+[\s\S]*?from\s+['"\\].*?['"\\];?/g, '// [unsupported import shimmed]');
+      cl = cl.replace(/import\s*\([\s\S]*?\);?/g, 'Promise.resolve({})');
 
       // 2. Normalize exports
       cl = cl.replace(/export\s*\*\s*from\s+['"\\].*?['"\\];?/g, '// [export * stripped]');
@@ -215,6 +260,30 @@ export function buildPreviewDoc(files, options = {}) {
       }
     }
   </script>
+  <script>
+    try {
+      if (typeof window !== 'undefined' && (!window.localStorage || typeof window.localStorage.getItem !== 'function')) {
+        throw new Error();
+      }
+      window.localStorage.getItem('_probe');
+    } catch (e) {
+      var _memStorage = {};
+      try {
+        Object.defineProperty(window, 'localStorage', {
+          value: {
+            getItem: function(k) { return Object.prototype.hasOwnProperty.call(_memStorage, k) ? _memStorage[k] : null; },
+            setItem: function(k, v) { _memStorage[k] = String(v); },
+            removeItem: function(k) { delete _memStorage[k]; },
+            clear: function() { _memStorage = {}; },
+            key: function(i) { return Object.keys(_memStorage)[i] || null; },
+            get length() { return Object.keys(_memStorage).length; }
+          },
+          configurable: true,
+          writable: true
+        });
+      } catch (err) {}
+    }
+  </script>
   <!-- React 18 & ReactDOM UMD (Fast jsDelivr CDN with unpkg fallback) -->
   <script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js" crossorigin></script>
   <script>window.React || document.write('<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin><\\/script>')</script>
@@ -239,18 +308,17 @@ export function buildPreviewDoc(files, options = {}) {
 
   <!-- Raw source preserved in plain text so Babel never misses DOMContentLoaded -->
   <script id="aethercraft-source" type="text/plain">
-    Object.assign(window, {
-      React,
-      ReactDOM,
-      useState: React.useState,
-      useEffect: React.useEffect,
-      useMemo: React.useMemo,
-      useRef: React.useRef,
-      useCallback: React.useCallback,
-      useContext: React.useContext,
-      createContext: React.createContext,
-      useReducer: React.useReducer
-    });
+    var _R = (typeof window !== 'undefined' && window.React) ? window.React : (typeof React !== 'undefined' ? React : null);
+    if (_R) {
+      window.useState = _R.useState;
+      window.useEffect = _R.useEffect;
+      window.useMemo = _R.useMemo;
+      window.useRef = _R.useRef;
+      window.useCallback = _R.useCallback;
+      window.useContext = _R.useContext;
+      window.createContext = _R.createContext;
+      window.useReducer = _R.useReducer;
+    }
 
     const LucideIcon = ({ name, size = 18, className = '', color = 'currentColor', ...props }) => {
       const iconRef = React.useRef(null);
@@ -456,8 +524,8 @@ export function buildPreviewDoc(files, options = {}) {
           ],
           filename: 'App.tsx'
         }).code;
-        var runner = new Function(compiled);
-        runner();
+        var runner = new Function('React', 'ReactDOM', compiled);
+        runner(window.React, window.ReactDOM);
       } catch (err) {
         console.error('[AetherCraft] Compilation error:', err.message);
         ${shouldReportErrors ? `

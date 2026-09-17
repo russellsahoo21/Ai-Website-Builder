@@ -5,6 +5,8 @@ node_modules
 
 # Testing and Scratch
 /scratch
+test-results/
+playwright-report/
 
 # Production build artifacts
 dist

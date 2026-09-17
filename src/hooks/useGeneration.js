@@ -42,12 +42,16 @@ export function useGeneration({
   const abortControllerRef = useRef(null);
   const autoFixCountRef = useRef(0);
   const lastAutoFixTimeRef = useRef(0);
-  const isGeneratingRef = useRef(false);
+  const streamStartTimeRef = useRef(0);
 
   const [telemetry, setTelemetry] = useState({
     status: 'idle',
+    phase: 'idle',
+    phaseMessage: 'Ready',
     tokens: 0,
+    tokenSpeed: 0,
     bytes: 0,
+    progressPercent: 0,
     latestLine: '',
     activeFile: 'src/App.jsx',
     parsedFilesCount: 0,
@@ -59,8 +63,12 @@ export function useGeneration({
     isGeneratingRef.current = false;
     setTelemetry({
       status: 'idle',
+      phase: 'idle',
+      phaseMessage: 'Cancelled',
       tokens: 0,
+      tokenSpeed: 0,
       bytes: 0,
+      progressPercent: 0,
       latestLine: '',
       activeFile: 'src/App.jsx',
       parsedFilesCount: 0,
@@ -222,11 +230,16 @@ export function useGeneration({
       { role: 'user', content: promptToSend }
     ];
 
+    streamStartTimeRef.current = Date.now();
     setTelemetry({
       status: 'connecting',
+      phase: 'connecting',
+      phaseMessage: 'Connecting to AI model gateway...',
       tokens: 0,
+      tokenSpeed: 0,
       bytes: 0,
-      latestLine: 'Awaiting first token from OpenRouter gateway...',
+      progressPercent: 10,
+      latestLine: 'Awaiting first token from model gateway...',
       activeFile: 'src/App.jsx',
       parsedFilesCount: 0,
     });
@@ -245,17 +258,33 @@ export function useGeneration({
           const lines = fullText.split('\n');
           const lastLine = lines.slice(-2).find(l => l.trim().length > 0) || '';
           const fileMatch = fullText.match(/<<<FILE:\s*([^\r\n>]+)/g);
-          const activeFile = fileMatch 
-            ? fileMatch[fileMatch.length - 1].replace(/<<<FILE:\s*/, '').replace(/>>>/, '').trim() 
-            : 'src/App.jsx';
+          const patchMatch = fullText.match(/<<<(?:PATCH|DIFF)(?::\s*([^\r\n>]+))?/g);
+          const isPatch = Boolean(patchMatch && patchMatch.length > 0);
+
+          let activeFile = 'src/App.jsx';
+          if (fileMatch && fileMatch.length > 0) {
+            activeFile = fileMatch[fileMatch.length - 1].replace(/<<<FILE:\s*/, '').replace(/>>>/, '').trim();
+          } else if (patchMatch && patchMatch.length > 0) {
+            const rawPatchTarget = patchMatch[patchMatch.length - 1].split(':')[1];
+            if (rawPatchTarget) activeFile = rawPatchTarget.replace(/>>>/, '').trim();
+          }
+
+          const currentTokens = Math.round(fullText.length / 3.8);
+          const elapsedSec = Math.max(0.5, (Date.now() - (streamStartTimeRef.current || Date.now())) / 1000);
+          const tokenSpeed = Math.round(currentTokens / elapsedSec);
+          const progressPercent = Math.min(92, Math.round(20 + Math.min(72, currentTokens / 20)));
 
           setTelemetry({
             status: 'streaming',
-            tokens: Math.round(fullText.length / 3.8),
+            phase: isPatch ? 'patching' : 'synthesizing',
+            phaseMessage: isPatch ? `Applying surgical patch to ${activeFile}...` : `Synthesizing ${activeFile}...`,
+            tokens: currentTokens,
+            tokenSpeed,
             bytes: fullText.length,
+            progressPercent,
             latestLine: lastLine.trim().slice(0, 95),
             activeFile,
-            parsedFilesCount: fileMatch ? fileMatch.length : 1,
+            parsedFilesCount: (fileMatch ? fileMatch.length : 0) + (patchMatch ? patchMatch.length : 0) || 1,
           });
         },
         onFileParsed: () => {
@@ -315,8 +344,25 @@ export function useGeneration({
           setTelemetry(prev => ({
             ...prev,
             status: 'compiling',
+            phase: 'compiling',
+            phaseMessage: 'Mounting application into sandboxed React 18 virtual DOM...',
+            progressPercent: 98,
             latestLine: 'Mounting application into sandboxed React 18 virtual DOM...'
           }));
+          setTimeout(() => {
+            setTelemetry({
+              status: 'idle',
+              phase: 'idle',
+              phaseMessage: 'Ready',
+              tokens: 0,
+              tokenSpeed: 0,
+              bytes: 0,
+              progressPercent: 100,
+              latestLine: '',
+              activeFile: 'src/App.jsx',
+              parsedFilesCount: 0,
+            });
+          }, 1200);
           isGeneratingRef.current = false;
           setIsGenerating(false);
           onRefresh();

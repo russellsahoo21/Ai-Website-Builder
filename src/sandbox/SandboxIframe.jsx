@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { buildPreviewDoc } from '../utils/previewBuilder.js';
 
@@ -24,6 +24,16 @@ export default function SandboxIframe({ files, keyTrigger, onError, className })
       iframeRef.current.srcdoc = doc;
     }
   }, [files, keyTrigger]);
+
+  useEffect(() => {
+    function handleMessage(event) {
+      if (event.data && event.data.type === 'SANDBOX_RUNTIME_ERROR') {
+        onError?.(event.data.error || { message: 'Runtime sandbox error' });
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onError]);
 
   return (
     <iframe

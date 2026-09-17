@@ -1,53 +1,30 @@
-import { optimizePromptPayload } from '@/src/utils/tokenOptimizer.js';
+import { getServerAuthSession } from '../../../src/services/serverAuth.js';
+import { optimizePromptPayload } from '../../../src/utils/tokenOptimizer.js';
+import { checkRateLimit, getRateLimitHeaders } from '../../../src/services/rateLimiter.js';
+import {
+  fetchUserProfile,
+  fetchUserTokenUsage,
+  recordDailyModelUsage,
+  atomicReserveTokens,
+  atomicRollbackTokens,
+  memoryTokenLedger
+} from '../../../src/services/dbService.js';
+import { getPlanConfig, isUnlimitedPlan } from '../../../src/config/plans.js';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
 const FREE_TIER_MONTHLY_TOKEN_CAP = 100000;
+const PRO_TIER_MONTHLY_TOKEN_CAP = 1000000;
 
-// In-memory token usage ledger per user/IP and billing period
-// Structure: Map<"userId_YYYY-MM", number>
-const tokenLedger = new Map();
+// Re-export memory ledger for tests and telemetry backwards compatibility
+export const tokenLedger = memoryTokenLedger;
 
 function getCurrentPeriod() {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   return `${year}-${month}`;
-}
-
-function getClientIdentifier(req, userId) {
-  if (userId && typeof userId === 'string') return userId;
-  const forwarded = req.headers.get('x-forwarded-for');
-  if (forwarded) return forwarded.split(',')[0].trim();
-  const realIp = req.headers.get('x-real-ip');
-  if (realIp) return realIp;
-  return 'anonymous-user';
-}
-
-function checkAndRecordUsage(userKey, estimatedTokens, isByok) {
-  if (isByok) return { allowed: true, quotaBypassed: true, currentUsage: 0, limit: Infinity };
-
-  const currentUsage = tokenLedger.get(userKey) || 0;
-  if (currentUsage >= FREE_TIER_MONTHLY_TOKEN_CAP) {
-    return {
-      allowed: false,
-      quotaBypassed: false,
-      currentUsage,
-      limit: FREE_TIER_MONTHLY_TOKEN_CAP,
-    };
-  }
-
-  // Tentatively record usage
-  const updated = currentUsage + estimatedTokens;
-  tokenLedger.set(userKey, updated);
-
-  return {
-    allowed: true,
-    quotaBypassed: false,
-    currentUsage: updated,
-    limit: FREE_TIER_MONTHLY_TOKEN_CAP,
-  };
 }
 
 const SYSTEM_PROMPT = `You are AetherCraft Engine, an elite React 18 & Full-Stack engineer. Generate production-grade, interactive applications.
@@ -75,7 +52,6 @@ CRITICAL RULES:
 5. No conversational filler or explanations outside delimiters. Output code/patches immediately.`;
 
 function buildFormattedMessages(messages, currentFiles, manifestFiles = []) {
-  // Static SYSTEM_PROMPT as message 0 enables provider prompt caching (Gemini, Claude, DeepSeek cache_read)
   const formatted = [{ role: 'system', content: SYSTEM_PROMPT }];
 
   const hasExistingCode = currentFiles && Object.keys(currentFiles).length > 0;
@@ -122,21 +98,89 @@ function buildFormattedMessages(messages, currentFiles, manifestFiles = []) {
 }
 
 export async function POST(req) {
+  const requestId = `gen_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const startTime = Date.now();
+
   try {
+    // 1. Authenticate with Clerk Server-Side
+    let authenticatedUserId = null;
+    try {
+      const authSession = getServerAuthSession(req);
+      authenticatedUserId = authSession?.userId || null;
+    } catch (authError) {
+      // In non-browser testing / mock environments
+    }
+
+    // Test bypass is strictly restricted to automated unit tests in test environment
+    const testUserId = process.env.NODE_ENV === 'test'
+      ? req.headers.get('x-test-user-id')
+      : null;
+    const effectiveUserId = authenticatedUserId || testUserId;
+
+    if (!effectiveUserId) {
+      console.warn(`[GEN_AUTH_REJECT] [${requestId}] Unauthenticated generation request rejected.`);
+      return Response.json(
+        {
+          error: 'Unauthorized: You must be signed in to generate code with AetherCraft.',
+          code: 'UNAUTHORIZED',
+          requestId,
+        },
+        {
+          status: 401,
+          headers: { 'X-Request-Id': requestId },
+        }
+      );
+    }
+
+    // 2. Request Rate Limiting (10 requests / min per user)
+    const rateLimitResult = checkRateLimit(effectiveUserId, { maxRequests: 10, windowMs: 60000 });
+    const rateLimitHeaders = getRateLimitHeaders(rateLimitResult);
+
+    if (!rateLimitResult.allowed) {
+      console.warn(`[GEN_RATE_LIMIT] [${requestId}] User ${effectiveUserId} exceeded rate limit.`);
+      return Response.json(
+        {
+          error: 'Generation rate limit exceeded. Please wait a moment before sending another request.',
+          code: 'RATE_LIMIT_EXCEEDED',
+          requestId,
+        },
+        {
+          status: 429,
+          headers: {
+            'X-Request-Id': requestId,
+            ...rateLimitHeaders,
+          },
+        }
+      );
+    }
+
     const body = await req.json();
     const {
       messages = [],
       currentFiles = {},
       model = 'openrouter/free',
       customApiKey = '',
-      userId = '',
     } = body;
 
     const isByok = Boolean(customApiKey && customApiKey.trim().length > 5);
-    const clientId = getClientIdentifier(req, userId);
-    const userLedgerKey = `${clientId}_${getCurrentPeriod()}`;
+    const currentPeriod = getCurrentPeriod();
 
-    // 1. Run Caveman + Graphify Context Optimizer
+    // 3. Retrieve User Plan & Verified Token Quota from Supabase PostgreSQL
+    let userPlan = 'free';
+    try {
+      const profile = await fetchUserProfile(effectiveUserId);
+      if (profile?.plan) {
+        userPlan = profile.plan;
+      }
+    } catch (e) {}
+
+    const hasUnlimitedQuota = isUnlimitedPlan(userPlan);
+    const planConfig = getPlanConfig(userPlan);
+    const tokenCap = hasUnlimitedQuota ? -1 : (planConfig.monthlyTokenQuota || FREE_TIER_MONTHLY_TOKEN_CAP);
+
+    console.log(`[GEN_START] [${requestId}] User: ${effectiveUserId} | Plan: ${userPlan} (Unlimited: ${hasUnlimitedQuota}) | Model: ${model} | Messages: ${messages.length}`);
+
+    // 4. Run Token Optimizer (Context Pruning & Graphify)
     const { optimizedMessages, optimizedFiles, manifestFiles, stats } = optimizePromptPayload({
       messages,
       currentFiles,
@@ -144,27 +188,48 @@ export async function POST(req) {
       systemPrompt: SYSTEM_PROMPT,
     });
 
-    console.log(`[TokenOptimizer] Graphify Pruning: ${stats.originalTokens} -> ${stats.optimizedTokens} tokens (Saved: ${stats.tokensSaved} tok / ${stats.savingsPercent}%)`);
+    console.log(`[GEN_OPTIMIZE] [${requestId}] Tokens: ${stats.originalTokens} -> ${stats.optimizedTokens} (Saved: ${stats.tokensSaved} tok / ${stats.savingsPercent}%)`);
 
-    // 2. Enforce 100k Free Tier Quota on optimized tokens
-    const quotaResult = checkAndRecordUsage(userLedgerKey, stats.optimizedTokens, isByok);
-    if (!quotaResult.allowed) {
-      return Response.json(
-        {
-          error: `Monthly free tier token quota (100,000 tokens) reached. Please upgrade to Pro or provide your own API key in Settings.`,
-          code: 'TOKEN_QUOTA_EXCEEDED',
-          usage: quotaResult.currentUsage,
-          limit: quotaResult.limit,
-        },
-        { status: 429 }
+    let reservedTokens = 0;
+    let quotaReserved = false;
+
+    // 5. Enforce Token Quota via Atomic Reservation (Skipped for BYOK or Unlimited Pro/Enterprise plans)
+    if (!isByok && !hasUnlimitedQuota) {
+      const reservation = await atomicReserveTokens(
+        effectiveUserId,
+        currentPeriod,
+        stats.optimizedTokens,
+        tokenCap
       );
+
+      if (!reservation.allowed) {
+        console.warn(`[GEN_QUOTA_EXCEEDED] [${requestId}] User ${effectiveUserId} reached quota (${reservation.currentUsed}/${tokenCap})`);
+        return Response.json(
+          {
+            error: `Monthly token quota of ${tokenCap.toLocaleString()} tokens reached for your ${userPlan} plan. Upgrade to Pro for unlimited generation or configure your own API key in Settings.`,
+            code: 'TOKEN_QUOTA_EXCEEDED',
+            usage: reservation.currentUsed,
+            limit: tokenCap,
+            requestId,
+          },
+          {
+            status: 403,
+            headers: {
+              'X-Request-Id': requestId,
+              ...rateLimitHeaders,
+            },
+          }
+        );
+      }
+
+      reservedTokens = stats.optimizedTokens;
+      quotaReserved = true;
     }
 
-    // 3. Format messages with Graphify context and manifest
+    // 6. Format messages with Graphify context and manifest
     const formattedMessages = buildFormattedMessages(optimizedMessages, optimizedFiles, manifestFiles);
 
-    // 4. Resolve Upstream Provider (Zero model restrictions!)
-    // If user provided a custom key, check provider prefix
+    // 7. Upstream Provider Routing
     const groqEnvKey = process.env.GROQ_API_KEY || process.env.NEXT_PUBLIC_GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
     const geminiEnvKey = process.env.GEMINI_API_KEY || process.env.NEXT_PUBLIC_GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
     const isDirectGroq = (isByok && customApiKey.startsWith('gsk_')) || (model.startsWith('groq/') && Boolean(groqEnvKey));
@@ -202,7 +267,6 @@ export async function POST(req) {
       upstreamBody.model = 'deepseek-ai/deepseek-v4-pro-0813';
       upstreamBody.chat_template_kwargs = { thinking: false };
     } else {
-      // Default router: OpenRouter handles ALL models
       upstreamKey = isByok ? customApiKey : (process.env.OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY);
       if (model === 'google/gemini-3.6-flash' || model === 'gemini-3.6-flash') {
         upstreamBody.model = 'google/gemini-2.0-flash-001';
@@ -210,12 +274,20 @@ export async function POST(req) {
     }
 
     if (!upstreamKey) {
+      if (quotaReserved && reservedTokens > 0) {
+        await atomicRollbackTokens(effectiveUserId, currentPeriod, reservedTokens).catch(() => {});
+        quotaReserved = false;
+      }
       return Response.json(
         {
           error: 'Platform API service key is not configured for this model provider. Please add your own API key in Settings.',
           code: 'MISSING_API_KEY',
+          requestId,
         },
-        { status: 500 }
+        {
+          status: 500,
+          headers: { 'X-Request-Id': requestId },
+        }
       );
     }
 
@@ -234,14 +306,14 @@ export async function POST(req) {
         body: JSON.stringify(upstreamBody),
       });
     } catch (fetchErr) {
-      console.warn('[Generate Route] Primary fetch error:', fetchErr.message);
+      console.warn(`[GEN_UPSTREAM_WARN] [${requestId}] Primary fetch error:`, fetchErr.message);
     }
 
-    // Auto-fallback: If direct Gemini fails or quota is exhausted (429/404/500), automatically fail over to OpenRouter Auto!
+    // Auto-fallback: If direct Gemini fails, fall back to OpenRouter Auto
     if ((!upstreamRes || !upstreamRes.ok) && isDirectGemini) {
       const openRouterKey = process.env.OPENROUTER_API_KEY || process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || process.env.VITE_OPENROUTER_API_KEY;
       if (openRouterKey) {
-        console.warn('[Generate Route] Gemini quota exhausted or error. Seamlessly falling back to OpenRouter Auto...');
+        console.warn(`[GEN_FALLBACK] [${requestId}] Seamlessly falling back to OpenRouter Auto...`);
         upstreamUrl = 'https://openrouter.ai/api/v1/chat/completions';
         upstreamKey = openRouterKey;
         upstreamBody.model = 'openrouter/free';
@@ -253,35 +325,60 @@ export async function POST(req) {
             body: JSON.stringify(upstreamBody),
           });
         } catch (fbErr) {
-          console.error('[Generate Route Fallback Error]', fbErr);
+          console.error(`[GEN_FALLBACK_ERROR] [${requestId}]`, fbErr);
         }
       }
     }
 
     if (!upstreamRes || !upstreamRes.ok) {
+      if (quotaReserved && reservedTokens > 0) {
+        console.log(`[GEN_ROLLBACK] [${requestId}] Rolling back ${reservedTokens} reserved tokens due to upstream failure.`);
+        await atomicRollbackTokens(effectiveUserId, currentPeriod, reservedTokens).catch(() => {});
+        quotaReserved = false;
+      }
       const errJson = await upstreamRes?.json().catch(() => ({}));
       const errMsg = errJson?.error?.message || `Upstream provider error (HTTP ${upstreamRes?.status || 500})`;
-      console.error('[Generate Route Upstream Error]', upstreamRes?.status, errMsg);
-      return Response.json({ error: errMsg, status: upstreamRes?.status || 500 }, { status: upstreamRes?.status || 500 });
+      console.error(`[GEN_UPSTREAM_ERROR] [${requestId}] Status: ${upstreamRes?.status} - ${errMsg}`);
+      return Response.json(
+        { error: errMsg, code: 'UPSTREAM_ERROR', requestId },
+        {
+          status: upstreamRes?.status || 500,
+          headers: { 'X-Request-Id': requestId, ...rateLimitHeaders },
+        }
+      );
     }
 
-    // 5. Direct Streaming Pipe
+    console.log(`[GEN_UPSTREAM_SUCCESS] [${requestId}] HTTP ${upstreamRes.status} in ${Date.now() - startTime}ms`);
+
+    // Record daily model analytics only after verified upstream generation success
+    recordDailyModelUsage(effectiveUserId, model, stats.optimizedTokens).catch(() => {});
+
+    // 8. Direct Streaming Pipe
     return new Response(upstreamRes.body, {
       headers: {
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
         'Connection': 'keep-alive',
+        'X-Request-Id': requestId,
+        'X-User-Plan': userPlan,
         'X-Tokens-Original': String(stats.originalTokens),
         'X-Tokens-Optimized': String(stats.optimizedTokens),
         'X-Tokens-Saved': String(stats.tokensSaved),
         'X-Savings-Percent': String(stats.savingsPercent),
+        ...rateLimitHeaders,
       },
     });
   } catch (error) {
-    console.error('[Generate Route Fatal]', error);
+    if (quotaReserved && reservedTokens > 0) {
+      await atomicRollbackTokens(effectiveUserId, currentPeriod, reservedTokens).catch(() => {});
+    }
+    console.error(`[GEN_FATAL] [${requestId}]`, error);
     return Response.json(
-      { error: error.message || 'Internal proxy synthesis error' },
-      { status: 500 }
+      { error: error.message || 'Internal proxy synthesis error', code: 'INTERNAL_ERROR', requestId },
+      {
+        status: 500,
+        headers: { 'X-Request-Id': requestId },
+      }
     );
   }
 }

@@ -110,3 +110,59 @@ export function buildFixPrompt(rawError, currentCode) {
     'Return the complete corrected src/App.jsx inside <<<FILE:src/App.jsx>>> and <<<END_FILE>>>.'
   );
 }
+
+/**
+ * Analyzes raw sandbox errors and produces clear, actionable diagnostics for the user and auto-fix engine.
+ */
+export function parseSandboxError(errorInput) {
+  const message = typeof errorInput === 'string' ? errorInput : (errorInput?.message || 'Unknown sandbox runtime error');
+  const stack = typeof errorInput === 'object' ? (errorInput?.stack || '') : '';
+
+  let errorType = 'Runtime Error';
+  let friendlyReason = 'An unexpected issue occurred while rendering component in the sandbox.';
+  let actionableGuidance = 'Review recent edits or allow AI auto-repair to fix it automatically.';
+  let detectedFile = 'src/App.jsx';
+  let lineNumber = null;
+
+  // Extract file and line from stack or message if available
+  const lineMatch = message.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|html)):(\d+)(?::(\d+))?/i) ||
+                    stack.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|html)):(\d+)(?::(\d+))?/i);
+  if (lineMatch) {
+    detectedFile = lineMatch[1];
+    lineNumber = parseInt(lineMatch[2], 10);
+  }
+
+  if (/is not defined/i.test(message)) {
+    errorType = 'Undefined Variable';
+    const varMatch = message.match(/(\w+)\s+is not defined/i);
+    const varName = varMatch ? varMatch[1] : 'A variable';
+    friendlyReason = `"${varName}" is referenced in ${detectedFile} but has not been defined or imported.`;
+    actionableGuidance = `Import "${varName}" from React or Lucide, or define it in component scope.`;
+  } else if (/Cannot read propert|Cannot destructure/i.test(message)) {
+    errorType = 'Null Access Error';
+    friendlyReason = 'Attempted to access properties of null or undefined state.';
+    actionableGuidance = 'Add optional chaining (?.) or initialize state with a safe default value.';
+  } else if (/Identifier.*already.*been.*declared/i.test(message)) {
+    errorType = 'Identifier Conflict';
+    friendlyReason = 'A component, icon, or variable name conflicts with an existing import or keyword.';
+    actionableGuidance = 'Rename the conflicting component or alias the imported icon.';
+  } else if (/Unexpected token|SyntaxError/i.test(message)) {
+    errorType = 'Syntax Error';
+    friendlyReason = 'JSX or JavaScript syntax could not be parsed.';
+    actionableGuidance = 'Check for unclosed tags, unmatched braces, or invalid syntax.';
+  } else if (/App component not found/i.test(message)) {
+    errorType = 'Missing Root Component';
+    friendlyReason = 'Could not find an exported "App" component to render.';
+    actionableGuidance = 'Ensure primary component is declared as "export default function App()".';
+  }
+
+  return {
+    raw: message,
+    errorType,
+    friendlyReason,
+    actionableGuidance,
+    detectedFile,
+    lineNumber,
+  };
+}
+

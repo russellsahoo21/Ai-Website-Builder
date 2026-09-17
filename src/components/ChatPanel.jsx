@@ -67,7 +67,8 @@ export default function ChatPanel({
   onCancelGeneration,
   selectedModel = 'gemini-3.6-flash',
   onSelectModel,
-  availableModels = []
+  availableModels = [],
+  telemetry = {}
 }) {
   const [input, setInput] = useState('');
   const [elapsed, setElapsed] = useState(0);
@@ -217,27 +218,67 @@ export default function ChatPanel({
         ))}
 
         {isGenerating && (
-          <div className="flex items-center justify-between p-2.5 rounded-lg bg-zinc-900 border border-zinc-800 text-zinc-300 text-xs shadow-sm">
-            <div className="flex items-center gap-2">
-              <RefreshCw className="w-3.5 h-3.5 animate-spin text-zinc-100" />
-              <span>Synthesizing code into sandbox...</span>
+          <div className="rounded-xl bg-zinc-900/90 border border-zinc-700/80 p-3 shadow-lg backdrop-blur-sm space-y-2.5 animate-fadeIn">
+            {/* Top row: Phase badge and elapsed time */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+                <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-cyan-300">
+                  {telemetry?.phase || 'Synthesizing'}
+                </span>
+                {telemetry?.activeFile && (
+                  <span className="text-[10px] font-mono text-zinc-400 bg-zinc-800/80 px-1.5 py-0.5 rounded truncate max-w-[150px]">
+                    {telemetry.activeFile}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[10px] text-zinc-400 bg-zinc-800/60 px-2 py-0.5 rounded border border-zinc-700/50">
+                  {elapsed}s
+                </span>
+                {onCancelGeneration && (
+                  <button
+                    type="button"
+                    onClick={onCancelGeneration}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-800 hover:bg-rose-950/40 text-zinc-300 hover:text-rose-300 text-[10px] font-mono transition border border-zinc-700 hover:border-rose-700/50"
+                    title="Stop code generation"
+                  >
+                    <Square className="w-2.5 h-2.5 fill-current text-rose-400" />
+                    <span>Stop</span>
+                  </button>
+                )}
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="font-mono text-[11px] text-zinc-400 bg-zinc-800/80 px-2 py-0.5 rounded">
-                {elapsed}s
-              </span>
-              {onCancelGeneration && (
-                <button
-                  type="button"
-                  onClick={onCancelGeneration}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white text-[10px] font-mono transition border border-zinc-700"
-                  title="Stop code generation"
-                >
-                  <Square className="w-2.5 h-2.5 fill-current text-rose-400" />
-                  <span>Stop</span>
-                </button>
-              )}
+
+            {/* Middle row: Phase message description */}
+            <div className="text-xs text-zinc-300 font-medium leading-snug">
+              {telemetry?.phaseMessage || 'Generating application components...'}
             </div>
+
+            {/* Progress bar */}
+            <div className="space-y-1">
+              <div className="w-full h-1.5 rounded-full bg-zinc-800 overflow-hidden relative">
+                <div 
+                  className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-300 rounded-full shadow-[0_0_8px_rgba(6,182,212,0.6)]"
+                  style={{ width: `${Math.max(5, telemetry?.progressPercent || 15)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between text-[10px] font-mono text-zinc-500">
+                <span>
+                  {telemetry?.tokens ? `${telemetry.tokens.toLocaleString()} tokens` : '0 tokens'}
+                  {telemetry?.tokenSpeed ? ` • ${telemetry.tokenSpeed} tok/s` : ''}
+                </span>
+                <span>{telemetry?.progressPercent || 15}%</span>
+              </div>
+            </div>
+
+            {/* Live streamed line preview */}
+            {telemetry?.latestLine && (
+              <div className="text-[10px] font-mono text-zinc-400 truncate bg-black/40 px-2 py-1 rounded border border-zinc-800/80">
+                <span className="text-cyan-400 mr-1.5">&gt;</span>
+                {telemetry.latestLine}
+              </div>
+            )}
           </div>
         )}
 

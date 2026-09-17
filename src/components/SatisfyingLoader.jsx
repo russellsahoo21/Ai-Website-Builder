@@ -20,9 +20,14 @@ export default function SatisfyingLoader({ promptText, onCancel, telemetry = {} 
   const activeFile = telemetry?.activeFile || 'src/App.jsx';
   const latestLine = telemetry?.latestLine || '';
 
+  const tokenSpeed = telemetry?.tokenSpeed || 0;
+  const phaseMessage = telemetry?.phaseMessage || '';
+
   // Calculate real compilation progress based on active stream
   let progressPercent = 15;
-  if (status === 'connecting') {
+  if (typeof telemetry?.progressPercent === 'number' && telemetry.progressPercent > 0) {
+    progressPercent = telemetry.progressPercent;
+  } else if (status === 'connecting') {
     progressPercent = Math.min(25, 12 + elapsed * 2);
   } else if (status === 'streaming') {
     // Smoothly scale progress with actual tokens received (typical React app is 1200-2500 tokens)
@@ -154,8 +159,8 @@ export default function SatisfyingLoader({ promptText, onCancel, telemetry = {} 
               <Activity className="w-3.5 h-3.5 text-zinc-300" />
               <span>
                 {tokens > 0 
-                  ? `${tokens.toLocaleString()} tokens • ${(bytes / 1024).toFixed(1)} KB`
-                  : 'Compilation Telemetry'}
+                  ? `${tokens.toLocaleString()} tokens${tokenSpeed ? ` • ${tokenSpeed} tok/s` : ''} • ${(bytes / 1024).toFixed(1)} KB`
+                  : (phaseMessage || 'Compilation Telemetry')}
               </span>
             </span>
             <span className="text-zinc-200 font-bold">{progressPercent}%</span>

@@ -1,4 +1,4 @@
-﻿import MarketingShell from "@/src/components/MarketingShell";
+import MarketingShell from "@/src/components/MarketingShell";
 import TemplatesPage from "@/src/views/TemplatesPage";
 
 export const metadata = {

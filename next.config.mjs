@@ -1,11 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: false,
+  turbopack: {},
   webpack: (config, { webpack }) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      '@clerk/react': '@clerk/nextjs',
-    };
     config.plugins.push(
       new webpack.DefinePlugin({
         'import.meta.env': JSON.stringify(process.env),

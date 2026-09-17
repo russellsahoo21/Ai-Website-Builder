@@ -1,17 +1,18 @@
-﻿import { chromium } from 'playwright';
+import { chromium } from 'playwright';
 
-const BASE_URL = 'http://localhost:5173';
+const BASE_URL = process.env.TEST_URL || 'http://localhost:3000';
 const CHROME_PATH = 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 const ROUTES = [
-  '#/',
-  '#/templates',
-  '#/showcase',
-  '#/pricing',
-  '#/integrations',
-  '#/docs',
-  '#/changelog',
-  '#/checkout'
+  '/',
+  '/templates',
+  '/showcase',
+  '/pricing',
+  '/integrations',
+  '/docs',
+  '/changelog',
+  '/checkout',
+  '/feedback'
 ];
 
 async function deepScan() {

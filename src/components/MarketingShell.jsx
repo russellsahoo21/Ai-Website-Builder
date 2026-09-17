@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import React from "react";
 import { useRouter } from "next/navigation";
@@ -9,12 +9,26 @@ export default function MarketingShell({ currentRoute = "landing", children }) {
   const router = useRouter();
 
   const handleNavigate = (route, params = {}) => {
-    let target = route === "landing" ? "/" : `/${route}`;
-    if (params.plan) {
-      target += `?plan=${params.plan}`;
-      if (params.cycle) target += `&cycle=${params.cycle}`;
+    const cleanRoute = (route || "").replace(/^\//, "");
+    let target = cleanRoute === "landing" || cleanRoute === "" ? "/" : `/${cleanRoute}`;
+    if (params && typeof params === "object") {
+      const searchParams = new URLSearchParams();
+      if (params.plan) searchParams.set("plan", params.plan);
+      if (params.cycle) searchParams.set("cycle", params.cycle);
+      const queryString = searchParams.toString();
+      if (queryString) target += `?${queryString}`;
     }
-    router.push(target);
+    if (router && typeof router.push === "function") {
+      try {
+        router.push(target);
+      } catch (e) {
+        if (typeof window !== "undefined") {
+          window.location.href = target;
+        }
+      }
+    } else if (typeof window !== "undefined") {
+      window.location.href = target;
+    }
   };
 
   return (

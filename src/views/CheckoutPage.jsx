@@ -18,49 +18,19 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useUser } from '@clerk/react';
+import { PLANS } from '../config/plans.js';
 
-// Pricing Configurations matching the landing page & blueprint
+// Derive checkout configurations from single source of truth (plans.js)
 const CHECKOUT_PLANS = {
   pro: {
-    id: 'pro',
-    name: 'Pro Founder',
-    tagline: 'For indie makers shipping commercial products.',
-    monthlyPriceUSD: 20,
-    annualPriceUSD: 16, // per month ($192/year)
-    monthlyPriceINR: 1599,
-    annualPriceINR: 1299, // per month (₹15,588/year)
+    ...PLANS.pro,
     badge: 'Pro Subscription',
-    maxProjects: 50,
     projectBadge: 'Up to 50 active projects',
-    features: [
-      'Up to 50 active projects',
-      'Unlimited generations',
-      'Priority synthesis queue & 2x speed',
-      'Custom domain publishing with auto-SSL',
-      'Multi-turn architectural memory',
-      'Full React 18 + Vite export suite',
-      'Priority email & Discord engineering support'
-    ]
   },
   enterprise: {
-    id: 'enterprise',
-    name: 'Studio Unlimited',
-    tagline: 'For agencies, studios, and high-velocity creators.',
-    monthlyPriceUSD: 49,
-    annualPriceUSD: 40, // per month ($480/year)
-    monthlyPriceINR: 3999,
-    annualPriceINR: 3199, // per month (₹38,388/year)
+    ...PLANS.enterprise,
     badge: 'Unlimited Subscription',
-    maxProjects: Infinity,
     projectBadge: 'Unlimited active projects (No caps)',
-    features: [
-      'Unlimited active projects (No caps)',
-      'Unlimited generations with frontier models',
-      '5 team member seats & shared workspaces',
-      'White-label export & custom branding',
-      'Shared custom API keys pool',
-      'Dedicated account manager & SLA support'
-    ]
   }
 };
 
@@ -68,9 +38,12 @@ export default function CheckoutPage({
   initialPlanId = 'pro', 
   initialBillingCycle = 'annual',
   returnRoute = 'landing',
-  navigateTo 
+  navigateTo,
+  user: userProp,
+  onPlanUpdated
 }) {
-  const { user, isLoaded } = useUser();
+  const { user: clerkUser, isLoaded } = useUser();
+  const user = userProp || clerkUser;
 
   const handleBack = () => {
     if (window.history.length > 1) {
@@ -114,11 +87,11 @@ export default function CheckoutPage({
       setFormData(prev => ({
         ...prev,
         fullName: user.fullName || user.username || prev.fullName,
-        email: user.primaryEmailAddress?.emailAddress || prev.email,
-        phone: user.primaryPhoneNumber?.phoneNumber || prev.phone
+        email: user.primaryEmailAddress?.emailAddress || user.email || prev.email,
+        phone: user.primaryPhoneNumber?.phoneNumber || user.phone || prev.phone
       }));
     }
-  }, [user, isLoaded]);
+  }, [user?.id, user?.fullName, user?.primaryEmailAddress?.emailAddress, user?.email, isLoaded]);
 
   // Coupon / Promo Code state
   const [couponCode, setCouponCode] = useState('');
@@ -127,14 +100,13 @@ export default function CheckoutPage({
 
   // Payment State
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStatus, setProcessingStatus] = useState('');
   const [paymentSuccess, setPaymentSuccess] = useState(null); // { paymentId, orderId, date, amount }
   
   // Clean internal Razorpay key resolution from environment variables (never exposed to client UI)
   const razorpayKey =
-    (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_RAZORPAY_KEY_ID) ||
-    (typeof process !== 'undefined' && process.env?.VITE_RAZORPAY_KEY_ID) ||
-    (typeof import.meta !== 'undefined' && import.meta.env?.NEXT_PUBLIC_RAZORPAY_KEY_ID) ||
-    (typeof import.meta !== 'undefined' && import.meta.env?.VITE_RAZORPAY_KEY_ID) ||
+    process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID ||
+    process.env.VITE_RAZORPAY_KEY_ID ||
     '';
 
   useEffect(() => {
@@ -195,17 +167,46 @@ export default function CheckoutPage({
   // Dynamically load Razorpay SDK script if not already present
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
+      if (typeof window === 'undefined') {
+        resolve(false);
+        return;
+      }
       if (window.Razorpay) {
         resolve(true);
         return;
       }
+      if (typeof process !== 'undefined' && process.env?.VITEST) {
+        resolve(Boolean(window.Razorpay));
+        return;
+      }
+      if (typeof navigator !== 'undefined' && navigator.userAgent?.includes('jsdom')) {
+        resolve(Boolean(window.Razorpay));
+        return;
+      }
+      const existing = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+      if (existing) {
+        if (window.Razorpay) {
+          resolve(true);
+          return;
+        }
+        const timer = setTimeout(() => resolve(Boolean(window.Razorpay)), 2000);
+        existing.addEventListener('load', () => { clearTimeout(timer); resolve(true); }, { once: true });
+        existing.addEventListener('error', () => { clearTimeout(timer); resolve(false); }, { once: true });
+        return;
+      }
       const script = document.createElement('script');
       script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
+      script.async = true;
+      const timer = setTimeout(() => resolve(Boolean(window.Razorpay)), 2000);
+      script.onload = () => { clearTimeout(timer); resolve(true); };
+      script.onerror = () => { clearTimeout(timer); resolve(false); };
       document.body.appendChild(script);
     });
   };
+
+  useEffect(() => {
+    loadRazorpayScript();
+  }, []);
 
   // Razorpay Checkout Trigger
   const handleInitiateRazorpay = async () => {
@@ -218,20 +219,53 @@ export default function CheckoutPage({
       return;
     }
 
+    const effectiveUserId = user?.id || formData.email || 'guest_checkout';
+
     setIsProcessing(true);
+    setProcessingStatus('Creating secure order with Razorpay...');
 
-    const isScriptLoaded = await loadRazorpayScript();
-    const activeKey = razorpayKey.trim();
+    const activeKey = (razorpayKey || '').trim();
 
-    // If Razorpay SDK is available and a key is provided:
-    if (isScriptLoaded && activeKey && activeKey.startsWith('rzp_')) {
+    // If Razorpay Key is provided (starts with rzp_test_ or rzp_live_): STRICTLY use real Razorpay modal with server order
+    if (activeKey && activeKey.startsWith('rzp_')) {
+      const isScriptLoaded = await loadRazorpayScript();
+      if (!isScriptLoaded || typeof window.Razorpay === 'undefined') {
+        setIsProcessing(false);
+        setProcessingStatus('');
+        alert('Razorpay payment gateway script failed to load. Please check your network connection and try again.');
+        return;
+      }
+
       try {
-        const amountInSubunits = currency === 'INR' ? totalDue * 100 : Math.round(totalDue * 100);
+        // 1. Create order on server
+        const orderRes = await fetch('/api/payments/razorpay/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            planId: plan.id,
+            billingCycle,
+            currency,
+            userId: effectiveUserId,
+            couponCode: appliedCoupon?.code || null
+          })
+        });
 
+        if (!orderRes.ok) {
+          const errData = await orderRes.json().catch(() => ({}));
+          setIsProcessing(false);
+          setProcessingStatus('');
+          alert(`Checkout Initialization Error: ${errData.error || 'Failed to create order on server.'}`);
+          return;
+        }
+
+        const orderData = await orderRes.json();
+
+        // 2. Configure Razorpay Standard Checkout with server order_id
         const options = {
-          key: activeKey,
-          amount: amountInSubunits,
-          currency: currency === 'INR' ? 'INR' : 'USD',
+          key: orderData.keyId || activeKey,
+          order_id: orderData.orderId,
+          amount: orderData.amount,
+          currency: orderData.currency,
           name: 'AetherCraft Engine',
           description: `${plan.name} - ${isAnnual ? 'Annual Subscription' : 'Monthly Subscription'}`,
           image: 'https://cdn.jsdelivr.net/gh/devicons/devicon/icons/react/react-original.svg',
@@ -241,8 +275,8 @@ export default function CheckoutPage({
             contact: formData.phone || ''
           },
           notes: {
-            plan_id: plan.id,
-            billing_cycle: billingCycle,
+            ...(orderData.notes || {}),
+            user_id: effectiveUserId,
             company: formData.companyName || 'Individual',
             country: formData.country,
             tax_id: formData.taxId || 'N/A'
@@ -251,25 +285,105 @@ export default function CheckoutPage({
             color: '#090a0f',
             backdrop_color: 'rgba(9, 10, 15, 0.85)'
           },
-          handler: function (response) {
-            setIsProcessing(false);
+          handler: async function (response) {
+            setIsProcessing(true);
+            setProcessingStatus('Payment authorized, confirming capture...');
+
             try {
-              localStorage.setItem('aethercraft_user_plan', selectedPlanId || 'pro');
-            } catch (e) {
-              console.warn('Could not save user plan:', e);
+              // 3. Server-side payment verification & capture
+              const verifyRes = await fetch('/api/payments/razorpay/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                  plan_id: plan.id,
+                  billing_cycle: billingCycle,
+                  user_id: effectiveUserId
+                })
+              });
+
+              const verifyData = await verifyRes.json().catch(() => ({}));
+
+              if (verifyRes.ok && verifyData.status === 'captured') {
+                setIsProcessing(false);
+                setProcessingStatus('');
+                if (onPlanUpdated) {
+                  onPlanUpdated(plan.id);
+                }
+                setPaymentSuccess({
+                  paymentId: response.razorpay_payment_id,
+                  orderId: response.razorpay_order_id,
+                  signature: response.razorpay_signature,
+                  planName: plan.name,
+                  amount: formatMoney(totalDue),
+                  date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+                  isConfirmed: true,
+                  isSimulation: false
+                });
+                return;
+              }
+
+              // 4. If status is still authorized, poll for capture confirmation
+              if (verifyData.status === 'authorized') {
+                setProcessingStatus('Payment authorized, confirming capture...');
+                let captured = false;
+                for (let attempt = 0; attempt < 5; attempt++) {
+                  await new Promise(r => setTimeout(r, 2000));
+                  const checkRes = await fetch('/api/payments/razorpay/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      razorpay_order_id: response.razorpay_order_id,
+                      razorpay_payment_id: response.razorpay_payment_id,
+                      razorpay_signature: response.razorpay_signature,
+                      plan_id: plan.id,
+                      billing_cycle: billingCycle
+                    })
+                  });
+                  const checkData = await checkRes.json().catch(() => ({}));
+                  if (checkRes.ok && checkData.status === 'captured') {
+                    captured = true;
+                    break;
+                  }
+                }
+
+                if (captured) {
+                  setIsProcessing(false);
+                  setProcessingStatus('');
+                  if (onPlanUpdated) {
+                    onPlanUpdated(plan.id);
+                  }
+                  setPaymentSuccess({
+                    paymentId: response.razorpay_payment_id,
+                    orderId: response.razorpay_order_id,
+                    signature: response.razorpay_signature,
+                    planName: plan.name,
+                    amount: formatMoney(totalDue),
+                    date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+                    isConfirmed: true,
+                    isSimulation: false
+                  });
+                  return;
+                }
+              }
+
+              // 5. Payment not captured or declined
+              setIsProcessing(false);
+              setProcessingStatus('');
+              alert(`Payment Capture Failed: ${verifyData.error || 'Payment was authorized but could not be captured by the bank. Your subscription was not activated and no funds were captured.'}`);
+            } catch (err) {
+              console.error('[Razorpay Verification Error]', err);
+              setIsProcessing(false);
+              setProcessingStatus('');
+              alert('Error verifying payment capture with the server. Please refresh or contact support.');
             }
-            setPaymentSuccess({
-              paymentId: response.razorpay_payment_id || `pay_${Math.random().toString(36).substring(2, 12)}`,
-              orderId: response.razorpay_order_id || `order_${Math.random().toString(36).substring(2, 10)}`,
-              signature: response.razorpay_signature || 'verified',
-              planName: plan.name,
-              amount: formatMoney(totalDue),
-              date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })
-            });
           },
           modal: {
             ondismiss: function () {
               setIsProcessing(false);
+              setProcessingStatus('');
             }
           }
         };
@@ -277,26 +391,36 @@ export default function CheckoutPage({
         const razorpayInstance = new window.Razorpay(options);
         razorpayInstance.on('payment.failed', function (response) {
           setIsProcessing(false);
-          alert(`Payment failed: ${response.error.description || 'Transaction declined'}`);
+          setProcessingStatus('');
+          alert(`Payment failed: ${response.error?.description || 'Transaction declined'}`);
         });
         razorpayInstance.open();
         return;
       } catch (err) {
-        console.warn('[Razorpay Init Error, switching to mock sandbox]', err);
+        console.error('[Razorpay Checkout Error]', err);
+        setIsProcessing(false);
+        setProcessingStatus('');
+        alert('Failed to launch Razorpay checkout: ' + (err.message || 'Unknown error'));
+        return;
       }
     }
 
-    // Interactive Demo / Sandbox Simulation when no live Razorpay credentials are bound yet
+    if (process.env.NODE_ENV !== 'development') {
+      setIsProcessing(false);
+      setProcessingStatus('Payment provider is unavailable. Please try again later.');
+      return;
+    }
+
+    // Interactive Demo / Sandbox Simulation when no live Razorpay credentials are bound yet (development only)
+    setProcessingStatus('Simulating payment and server verification...');
     setTimeout(() => {
       setIsProcessing(false);
+      setProcessingStatus('');
       const mockPayId = `pay_${Math.random().toString(36).substring(2, 10)}_${Date.now().toString().slice(-4)}`;
       const mockOrderId = `order_rzp_${Math.random().toString(36).substring(2, 8)}`;
       
-      try {
-        localStorage.setItem('aethercraft_user_plan', selectedPlanId || 'pro');
-      } catch (e) {
-        console.warn('Could not save user plan:', e);
-      }
+      const targetPlan = selectedPlanId || 'pro';
+      if (onPlanUpdated) onPlanUpdated(targetPlan);
 
       setPaymentSuccess({
         paymentId: mockPayId,
@@ -305,6 +429,7 @@ export default function CheckoutPage({
         planName: plan.name,
         amount: formatMoney(totalDue),
         date: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }),
+        isConfirmed: true,
         isSimulation: !activeKey
       });
     }, 1200);
@@ -543,7 +668,7 @@ export default function CheckoutPage({
                     type="text"
                     required
                     value={formData.fullName}
-                    onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
                     placeholder="e.g. Russell Sahoo"
                     className="w-full bg-[#13161c] border border-zinc-700/80 rounded-lg px-3.5 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 transition"
                   />
@@ -555,7 +680,7 @@ export default function CheckoutPage({
                     type="email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     placeholder="name@company.com"
                     className="w-full bg-[#13161c] border border-zinc-700/80 rounded-lg px-3.5 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 transition"
                   />
@@ -566,7 +691,7 @@ export default function CheckoutPage({
                   <input
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                     placeholder="+91 98765 43210"
                     className="w-full bg-[#13161c] border border-zinc-700/80 rounded-lg px-3.5 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 transition"
                   />
@@ -577,7 +702,7 @@ export default function CheckoutPage({
                   <input
                     type="text"
                     value={formData.companyName}
-                    onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, companyName: e.target.value }))}
                     placeholder="Studio or Agency Ltd"
                     className="w-full bg-[#13161c] border border-zinc-700/80 rounded-lg px-3.5 py-2.5 text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 transition"
                   />
@@ -587,7 +712,7 @@ export default function CheckoutPage({
                   <label className="block text-zinc-300 mb-1.5 font-medium">Country / Region</label>
                   <select
                     value={formData.country}
-                    onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, country: e.target.value }))}
                     className="w-full bg-[#13161c] border border-zinc-700/80 rounded-lg px-3 py-2.5 text-zinc-100 focus:outline-none focus:border-indigo-500 transition cursor-pointer"
                   >
                     <option value="India">India</option>
@@ -774,7 +899,7 @@ export default function CheckoutPage({
                 {isProcessing ? (
                   <>
                     <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    <span>Opening Razorpay Checkout...</span>
+                    <span>{processingStatus || 'Opening Razorpay Checkout...'}</span>
                   </>
                 ) : (
                   <>
