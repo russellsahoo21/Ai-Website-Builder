@@ -244,6 +244,7 @@ export default function App({ initialRoute }) {
   useSandboxMessages({
     isGenerating,
     enabled: currentRoute === 'studio',
+    files,
     onRuntimeError: useCallback((msg) => {
       console.warn('[Sandbox Runtime Error Detected]', msg);
       executeAutoFix(msg, false);

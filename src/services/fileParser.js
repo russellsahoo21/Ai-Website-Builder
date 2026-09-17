@@ -93,7 +93,12 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
     const isClosed = fullBlock.includes('<<<END_PATCH') || fullBlock.includes('<<<END_DIFF');
 
     if (!isClosed) {
-      warnings.push({ file: name, reason: 'Truncated patch block: missing <<<END_PATCH>>> delimiter.' });
+      errors.push({ file: name, reason: `Truncated patch block: missing <<<END_PATCH>>> delimiter for ${name}.` });
+      // Unclosed PATCH/DIFF blocks must not be applied
+      if (existingFiles[name]) {
+        raw[name] = existingFiles[name];
+      }
+      continue;
     }
 
     let patchContent = patchMatch[2].trim().replace(/<<<END_(?:PATCH|DIFF)>*/g, '').trim();
@@ -188,7 +193,12 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
       const name = normalizeFilePath(rawName ? cleanFilename(rawName) : classifyContent(content));
 
       if (!isClosed) {
-        warnings.push({ file: name, reason: `Unclosed markdown code block for ${name}.` });
+        errors.push({ file: name, reason: `Unclosed markdown code block for ${name}.` });
+        // Unclosed Markdown code blocks must not be added to raw files
+        if (existingFiles[name]) {
+          raw[name] = existingFiles[name];
+        }
+        continue;
       }
       if (name && content.length >= MIN_CONTENT_LENGTH) {
         raw[name] = content;
@@ -210,7 +220,13 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
   }
 
   const resolved = resolveFileConflicts(raw);
-  const isComplete = errors.length === 0 && Object.keys(resolved.files).length > 0;
+  const hasIncompleteDelimiters = errors.length > 0 || warnings.some(w =>
+    w.reason.toLowerCase().includes('unclosed') ||
+    w.reason.toLowerCase().includes('truncated') ||
+    w.reason.toLowerCase().includes('missing') ||
+    w.reason.toLowerCase().includes('incomplete')
+  );
+  const isComplete = !hasIncompleteDelimiters && errors.length === 0 && Object.keys(resolved.files).length > 0;
 
   return {
     ...resolved,

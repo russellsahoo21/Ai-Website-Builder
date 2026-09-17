@@ -25,7 +25,7 @@ const BENIGN_ERROR_PATTERNS = [
  * @param {Function} params.onRuntimeError - Called with (errorMsg) on SANDBOX_RUNTIME_ERROR
  * @param {Function} params.onManualFix - Called with (errorMsg) on TRIGGER_AUTO_FIX
  */
-export function useSandboxMessages({ isGenerating = false, enabled = true, onRuntimeError, onManualFix }) {
+export function useSandboxMessages({ isGenerating = false, enabled = true, onRuntimeError, onManualFix, files = null }) {
   const lastHandledTimeRef = useRef(0);
   const lastHandledErrorRef = useRef('');
   const isGeneratingRef = useRef(isGenerating);
@@ -33,6 +33,11 @@ export function useSandboxMessages({ isGenerating = false, enabled = true, onRun
   useEffect(() => {
     isGeneratingRef.current = isGenerating;
   }, [isGenerating]);
+
+  // Reset handled error cache whenever files are updated/changed
+  useEffect(() => {
+    lastHandledErrorRef.current = '';
+  }, [files]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -43,12 +48,14 @@ export function useSandboxMessages({ isGenerating = false, enabled = true, onRun
 
       if (event.data.type === 'TRIGGER_AUTO_FIX') {
         const msg = event.data.error?.message || 'Rendering error';
+        // Manual Auto-Fix always works and clears the error lock
+        lastHandledErrorRef.current = '';
         onManualFix?.(msg);
         return;
       }
 
       if (event.data.type === 'SANDBOX_RUNTIME_ERROR') {
-        // 1. NEVER trigger auto-fix while code is actively streaming or compiling
+        // 1. NEVER trigger auto-fix while code is actively streaming or compiling (only when idle)
         if (isGeneratingRef.current) {
           return;
         }
@@ -61,12 +68,12 @@ export function useSandboxMessages({ isGenerating = false, enabled = true, onRun
           return;
         }
 
-        const now = Date.now();
-        // 3. Trigger exactly once per error message within a 10-second window
-        if (lastHandledErrorRef.current === rawMsg && (now - lastHandledTimeRef.current < 10000)) {
+        // 3. Avoid repeatedly repairing the same unchanged error
+        if (lastHandledErrorRef.current === rawMsg) {
           return;
         }
 
+        const now = Date.now();
         // 4. Minimum 3.5s cooldown between any distinct errors
         if (now - lastHandledTimeRef.current < 3500) {
           return;
@@ -81,5 +88,5 @@ export function useSandboxMessages({ isGenerating = false, enabled = true, onRun
 
     window.addEventListener('message', handler);
     return () => window.removeEventListener('message', handler);
-  }, [onRuntimeError, onManualFix]);
+  }, [enabled, onRuntimeError, onManualFix]);
 }

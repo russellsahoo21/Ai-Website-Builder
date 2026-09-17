@@ -60,7 +60,25 @@ export function useGeneration({
     parsedFilesCount: 0,
   });
 
+  const executeAutoFixRef = useRef(null);
+  const repairTimerRef = useRef(null);
+
+  const scheduleRepair = useCallback((repairPrompt) => {
+    if (repairTimerRef.current) {
+      clearTimeout(repairTimerRef.current);
+      repairTimerRef.current = null;
+    }
+    repairTimerRef.current = setTimeout(() => {
+      repairTimerRef.current = null;
+      executeAutoFixRef.current?.(repairPrompt, false);
+    }, 450);
+  }, []);
+
   const handleCancelGeneration = useCallback(() => {
+    if (repairTimerRef.current) {
+      clearTimeout(repairTimerRef.current);
+      repairTimerRef.current = null;
+    }
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     isGeneratingRef.current = false;
@@ -176,6 +194,24 @@ export function useGeneration({
           // Do not commit incomplete files to state during streaming to prevent syntax errors
         },
         onComplete: (fullText, finalResult) => {
+          // 1. Check parser completion & errors before merging or validating
+          const hasParserErrors = !finalResult?.isComplete || (finalResult?.errors && finalResult.errors.length > 0);
+          if (hasParserErrors) {
+            console.warn('[Auto-Fix Parser Incomplete]', finalResult?.errors);
+            if (finalResult?.totalConsumed > 0) {
+              rollbackTokenUsage(finalResult.totalConsumed, userIdRef.current);
+            }
+            setMessages(prev => prev.filter(m => m._id !== statusMsgId));
+            isGeneratingRef.current = false;
+            setIsGenerating(false);
+
+            const firstErr = finalResult?.errors?.[0] || { file: 'src/App.jsx', reason: 'Output incomplete' };
+            if (autoFixCountRef.current < MAX_AUTO_FIX_ATTEMPTS) {
+              scheduleRepair(`Model output was incomplete for ${firstErr.file}: ${firstErr.reason}. Please provide complete code inside <<<FILE:${firstErr.file}>>> ... <<<END_FILE>>>.`);
+            }
+            return;
+          }
+
           let { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
           if (!needsConversion && Object.keys(merged).length > 0) {
             merged = ensureStandardReactStructure(merged);
@@ -190,7 +226,7 @@ export function useGeneration({
               }
               const err = validation.errors[0];
               if (autoFixCountRef.current < MAX_AUTO_FIX_ATTEMPTS) {
-                setTimeout(() => executeAutoFix(`Syntax error in ${err.file} at line ${err.line}, col ${err.column}: ${err.message}`, false), 500);
+                scheduleRepair(`Syntax error in ${err.file} at line ${err.line}, col ${err.column}: ${err.message}`);
               }
             }
           }
@@ -201,8 +237,7 @@ export function useGeneration({
           setIsGenerating(false);
 
           if (needsConversion) {
-            // Trigger another round to get React output
-            setTimeout(() => executeAutoFix('Output was HTML, convert to React', false), 500);
+            scheduleRepair('Output was HTML, convert to React');
           }
         },
         onError: (err) => {
@@ -218,7 +253,11 @@ export function useGeneration({
       setIsGenerating(false);
       console.error('[BTS Auto-fix caught]', err.message);
     }
-  }, [apiKeyRef, selectedModelRef, filesRef, messagesRef, setFiles, setMessages, setIsGenerating, onRefresh, mergeFiles]);
+  }, [apiKeyRef, selectedModelRef, filesRef, messagesRef, setFiles, setMessages, setIsGenerating, onRefresh, mergeFiles, scheduleRepair]);
+
+  useEffect(() => {
+    executeAutoFixRef.current = executeAutoFix;
+  }, [executeAutoFix]);
 
   /**
    * Main user-triggered generation.
@@ -229,6 +268,10 @@ export function useGeneration({
     if (!hasKey) return false; // caller should open settings
 
     autoFixCountRef.current = 0;
+    if (repairTimerRef.current) {
+      clearTimeout(repairTimerRef.current);
+      repairTimerRef.current = null;
+    }
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
     isGeneratingRef.current = true;
@@ -249,12 +292,12 @@ export function useGeneration({
     setTelemetry({
       status: 'connecting',
       phase: 'connecting',
-      phaseMessage: 'Connecting to AI model gateway...',
+      phaseMessage: 'Connecting to neural inference pipeline...',
       tokens: 0,
       tokenSpeed: 0,
       bytes: 0,
-      progressPercent: 10,
-      latestLine: 'Awaiting first token from model gateway...',
+      progressPercent: 12,
+      latestLine: 'Connecting to neural inference pipeline...',
       activeFile: 'src/App.jsx',
       parsedFilesCount: 0,
     });
@@ -263,8 +306,8 @@ export function useGeneration({
       let conversionNeeded = false;
 
       await streamGenerateWebsite({
-        apiKey,
-        model: selectedModel,
+        apiKey: apiKeyRef.current,
+        model: selectedModelRef.current,
         userId: userIdRef.current,
         messages: messagesForEngine,
         currentFiles: filesRef.current,
@@ -272,9 +315,9 @@ export function useGeneration({
         onChunk: (delta, fullText) => {
           const lines = fullText.split('\n');
           const lastLine = lines.slice(-2).find(l => l.trim().length > 0) || '';
+          const isPatch = fullText.includes('<<<PATCH') || fullText.includes('<<<DIFF');
           const fileMatch = fullText.match(/<<<FILE:\s*([^\r\n>]+)/g);
-          const patchMatch = fullText.match(/<<<(?:PATCH|DIFF)(?::\s*([^\r\n>]+))?/g);
-          const isPatch = Boolean(patchMatch && patchMatch.length > 0);
+          const patchMatch = fullText.match(/<<<(?:PATCH|DIFF)(?::\s*([^\r\n>]+?))?\s*>>>/g);
 
           let activeFile = 'src/App.jsx';
           if (fileMatch && fileMatch.length > 0) {
@@ -306,6 +349,40 @@ export function useGeneration({
           // Do not commit incomplete files to state during streaming to prevent syntax errors
         },
         onComplete: (fullText, finalResult) => {
+          // 1. Check parser completion & errors BEFORE merging or validating files
+          const hasParserErrors = !finalResult?.isComplete || (finalResult?.errors && finalResult.errors.length > 0);
+          if (hasParserErrors) {
+            console.warn('[Generation Parser Incomplete] Preserving previous project:', finalResult?.errors);
+            if (finalResult?.totalConsumed > 0) {
+              rollbackTokenUsage(finalResult.totalConsumed, userIdRef.current);
+            }
+
+            const firstErr = finalResult?.errors?.[0] || { file: 'src/App.jsx', reason: 'Output was truncated or incomplete' };
+            const friendlyErr = `Generation was cut off or incomplete for ${firstErr.file}. Preserving your working code while auto-repairing in background…`;
+            setMessages(prev => [...prev, { role: 'ai', content: friendlyErr }]);
+
+            setTelemetry({
+              status: 'idle',
+              phase: 'idle',
+              phaseMessage: `Incomplete output for ${firstErr.file} — auto-repairing...`,
+              tokens: 0,
+              tokenSpeed: 0,
+              bytes: 0,
+              progressPercent: 0,
+              latestLine: '',
+              activeFile: firstErr.file,
+              parsedFilesCount: 0,
+            });
+
+            isGeneratingRef.current = false;
+            setIsGenerating(false);
+
+            if (autoFixCountRef.current < MAX_AUTO_FIX_ATTEMPTS) {
+              scheduleRepair(`Model output was incomplete for ${firstErr.file}: ${firstErr.reason}. Please provide complete code inside <<<FILE:${firstErr.file}>>> ... <<<END_FILE>>>.`);
+            }
+            return;
+          }
+
           let { merged, needsConversion } = mergeFiles(finalResult, filesRef.current);
 
           const hasAppJsx = Boolean(merged['src/App.jsx'] || merged['App.jsx']);
@@ -330,9 +407,7 @@ export function useGeneration({
 
             // If src/App.jsx was completely omitted by model, automatically repair in background
             if (!hasAppJsx && isValidProject) {
-              setTimeout(() => {
-                executeAutoFix('src/App.jsx was omitted during generation. Please synthesize the complete src/App.jsx component.', false);
-              }, 400);
+              scheduleRepair('src/App.jsx was omitted during generation. Please synthesize the complete src/App.jsx component.');
             }
           }
 
@@ -359,9 +434,7 @@ export function useGeneration({
             setIsGenerating(false);
 
             if (autoFixCountRef.current < MAX_AUTO_FIX_ATTEMPTS) {
-              setTimeout(() => {
-                executeAutoFix(`Syntax error in ${firstErr.file} at line ${firstErr.line}, col ${firstErr.column}: ${firstErr.message}`, false);
-              }, 400);
+              scheduleRepair(`Syntax error in ${firstErr.file} at line ${firstErr.line}, col ${firstErr.column}: ${firstErr.message}`);
             }
             return;
           }
@@ -428,7 +501,7 @@ export function useGeneration({
           onRefresh();
 
           if (needsConversion) {
-            setTimeout(() => executeAutoFix('Output was HTML, convert to React', false), 500);
+            scheduleRepair('Output was HTML, convert to React');
           }
         },
         onError: (err) => {
@@ -468,7 +541,7 @@ export function useGeneration({
     }
 
     return true;
-  }, [apiKey, selectedModel, filesRef, messagesRef, setFiles, setMessages, setIsGenerating, onRefresh, mergeFiles, executeAutoFix]);
+  }, [apiKey, selectedModel, filesRef, messagesRef, setFiles, setMessages, setIsGenerating, onRefresh, mergeFiles, scheduleRepair]);
 
   return {
     handleSendMessage,
