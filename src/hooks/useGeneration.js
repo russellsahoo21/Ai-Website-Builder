@@ -45,6 +45,7 @@ export function useGeneration({
   const isGeneratingRef = useRef(false);
   const autoFixCountRef = useRef(0);
   const lastAutoFixTimeRef = useRef(0);
+  const lastRepairErrorRef = useRef('');
   const streamStartTimeRef = useRef(0);
 
   const [telemetry, setTelemetry] = useState({
@@ -79,6 +80,8 @@ export function useGeneration({
       clearTimeout(repairTimerRef.current);
       repairTimerRef.current = null;
     }
+    lastRepairErrorRef.current = '';
+    autoFixCountRef.current = 0;
     abortControllerRef.current?.abort();
     abortControllerRef.current = null;
     isGeneratingRef.current = false;
@@ -121,23 +124,23 @@ export function useGeneration({
     const hasKey = Boolean(apiKeyRef.current || isProviderWithDefault || import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_GROQ_API_KEY);
     if (!hasKey || isGeneratingRef.current) return;
 
-    // Minimum 4-second cooldown between auto-repair attempts
-    const now = Date.now();
-    if (!isManual && (now - lastAutoFixTimeRef.current < 4000)) {
+    // Deduplicate identical errors occurring in quick succession
+    if (!isManual && rawErrorMsg && rawErrorMsg === lastRepairErrorRef.current && (now - lastAutoFixTimeRef.current < 6000)) {
       return;
     }
+    lastRepairErrorRef.current = rawErrorMsg || '';
     lastAutoFixTimeRef.current = now;
 
     if (!isManual && autoFixCountRef.current >= MAX_AUTO_FIX_ATTEMPTS) {
-      // Exhausted retries — show single friendly suggestion at most once
+      // Exhausted retries — show clear final error when retries are exhausted
       setMessages(prev => {
-        const alreadyPosted = prev.some(m => m.content?.includes('needs a different approach'));
+        const alreadyPosted = prev.some(m => m.content?.includes('maximum retry limit'));
         if (alreadyPosted) return prev;
         return [
           ...prev,
           {
             role: 'ai',
-            content: 'The app needs a different approach. Try simplifying your prompt, or switch to a higher-quality model in Settings.',
+            content: 'Auto-repair reached the maximum retry limit (3/3). Please inspect the code or try a different prompt.',
           },
         ];
       });
@@ -268,6 +271,7 @@ export function useGeneration({
     if (!hasKey) return false; // caller should open settings
 
     autoFixCountRef.current = 0;
+    lastRepairErrorRef.current = '';
     if (repairTimerRef.current) {
       clearTimeout(repairTimerRef.current);
       repairTimerRef.current = null;

@@ -133,19 +133,22 @@ export function buildFixPrompt(rawError, currentCode) {
 export function parseSandboxError(errorInput) {
   const message = typeof errorInput === 'string' ? errorInput : (errorInput?.message || 'Unknown sandbox runtime error');
   const stack = typeof errorInput === 'object' ? (errorInput?.stack || '') : '';
+  const errorStage = (typeof errorInput === 'object' && errorInput?.errorStage) ? errorInput.errorStage : 'runtime';
 
-  let errorType = 'Runtime Error';
+  let errorType = errorStage === 'compilation' ? 'Compilation Error' : (errorStage === 'validation' ? 'Validation Error' : 'Runtime Error');
   let friendlyReason = 'An unexpected issue occurred while rendering component in the sandbox.';
   let actionableGuidance = 'Review recent edits or allow AI auto-repair to fix it automatically.';
-  let detectedFile = 'src/App.jsx';
-  let lineNumber = null;
+  let detectedFile = (typeof errorInput === 'object' && errorInput?.file) ? errorInput.file : 'src/App.jsx';
+  let lineNumber = (typeof errorInput === 'object' && errorInput?.line) ? errorInput.line : null;
 
-  // Extract file and line from stack or message if available
-  const lineMatch = message.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|ts|html))(?::|\s+at\s+line\s+)(\d+)(?::(\d+))?/i) ||
-                    stack.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|ts|html))(?::|\s+at\s+line\s+)(\d+)(?::(\d+))?/i);
-  if (lineMatch) {
-    detectedFile = lineMatch[1];
-    lineNumber = parseInt(lineMatch[2], 10);
+  // Extract file and line from stack or message if not explicitly provided
+  if (!lineNumber) {
+    const lineMatch = message.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|ts|html))(?::|\s+at\s+line\s+)(\d+)(?::(\d+))?/i) ||
+                      stack.match(/(?:at\s+|in\s+)?([\w/-]+\.(?:jsx|js|tsx|ts|html))(?::|\s+at\s+line\s+)(\d+)(?::(\d+))?/i);
+    if (lineMatch) {
+      detectedFile = lineMatch[1];
+      lineNumber = parseInt(lineMatch[2], 10);
+    }
   }
 
   // Avoid reporting min.js or App.tsx or anonymous when the source file is App.jsx
@@ -155,10 +158,18 @@ export function parseSandboxError(errorInput) {
 
   if (/is not defined/i.test(message)) {
     errorType = 'Undefined Variable';
-    const varMatch = message.match(/(\w+)\s+is not defined/i);
+    const varMatch = message.match(/(?:variable or component\s+)?"?(\w+)"?\s+is not defined/i);
     const varName = varMatch ? varMatch[1] : 'A variable';
     friendlyReason = `"${varName}" is referenced in ${detectedFile} but has not been defined or imported.`;
     actionableGuidance = `Import "${varName}" from React or Lucide, or define it in component scope.`;
+  } else if (/Unsupported external package/i.test(message)) {
+    errorType = 'Unsupported Package';
+    friendlyReason = message;
+    actionableGuidance = 'Replace with "lucide-react", standard React hooks, or native web APIs.';
+  } else if (/Missing local import/i.test(message)) {
+    errorType = 'Missing Local Import';
+    friendlyReason = message;
+    actionableGuidance = 'Create the required sub-component or update the import path.';
   } else if (/Cannot read propert|Cannot destructure/i.test(message)) {
     errorType = 'Null Access Error';
     friendlyReason = 'Attempted to access properties of null or undefined state.';
@@ -171,15 +182,20 @@ export function parseSandboxError(errorInput) {
     errorType = 'Syntax Error';
     friendlyReason = 'JSX or JavaScript syntax could not be parsed.';
     actionableGuidance = 'Check for unclosed tags, unmatched braces, or invalid syntax.';
-  } else if (/App component not found/i.test(message)) {
+  } else if (/App component not found|Missing primary component|Missing App component export/i.test(message)) {
     errorType = 'Missing Root Component';
     friendlyReason = 'Could not find an exported "App" component to render.';
     actionableGuidance = 'Ensure primary component is declared as "export default function App()".';
+  } else if (/Preview timed out|rendered blank/i.test(message)) {
+    errorType = 'Mount Timeout';
+    friendlyReason = 'Preview component failed to mount within 7 seconds or rendered a blank screen.';
+    actionableGuidance = 'Check for infinite loops, blocking effects, or missing render output.';
   }
 
   return {
     raw: message,
     errorType,
+    errorStage,
     friendlyReason,
     actionableGuidance,
     detectedFile,

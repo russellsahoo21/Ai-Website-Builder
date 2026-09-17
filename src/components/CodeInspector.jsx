@@ -70,7 +70,9 @@ export default function CodeInspector({
   canUndo = false,
   canRedo = false,
   onUndo,
-  onRedo
+  onRedo,
+  targetFile = null,
+  targetLine = null
 }) {
   const fileNames = Object.keys(files);
   const defaultAppFile = fileNames.includes('src/App.jsx') 
@@ -92,9 +94,35 @@ export default function CodeInspector({
   const [copied, setCopied] = useState(false);
   const [collapsedFolders, setCollapsedFolders] = useState({});
   const [cursorPos, setCursorPos] = useState({ line: 1, col: 1 });
-  
+  const [highlightLine, setHighlightLine] = useState(null);
+
   const textareaRef = useRef(null);
   const newFileInputRef = useRef(null);
+
+  useEffect(() => {
+    if (targetFile && files[targetFile] !== undefined) {
+      setActiveFile(targetFile);
+      setOpenTabs(prev => prev.includes(targetFile) ? prev : [...prev, targetFile]);
+      if (targetLine) {
+        setHighlightLine(targetLine);
+        setCursorPos({ line: targetLine, col: 1 });
+        const content = files[targetFile] || '';
+        const lines = content.split('\n');
+        let charIndex = 0;
+        for (let i = 0; i < Math.min(targetLine - 1, lines.length); i++) {
+          charIndex += lines[i].length + 1;
+        }
+        setTimeout(() => {
+          if (textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.setSelectionRange(charIndex, charIndex);
+            const lineHeight = 24;
+            textareaRef.current.scrollTop = Math.max(0, (targetLine - 5) * lineHeight);
+          }
+        }, 60);
+      }
+    }
+  }, [targetFile, targetLine, files]);
 
   // Global content search results across all files in workspace
   const contentSearchResults = useMemo(() => {
@@ -746,14 +774,19 @@ export default function CodeInspector({
         <div className="flex-1 relative overflow-hidden flex bg-[#090b10]">
           {/* Line Numbers Gutter */}
           <div className="w-12 bg-[#07090e] border-r border-zinc-800/80 py-4 select-none font-mono text-[11px] text-zinc-600 text-right pr-3 leading-6 overflow-hidden shrink-0">
-            {Array.from({ length: Math.max(lineCount, 1) }).map((_, i) => (
-              <div 
-                key={i}
-                className={cursorPos.line === i + 1 ? 'text-cyan-400 font-bold' : ''}
-              >
-                {i + 1}
-              </div>
-            ))}
+            {Array.from({ length: Math.max(lineCount, 1) }).map((_, i) => {
+              const lineNum = i + 1;
+              const isCursor = cursorPos.line === lineNum;
+              const isHighlight = highlightLine === lineNum;
+              return (
+                <div 
+                  key={i}
+                  className={isHighlight ? 'text-amber-400 font-bold bg-amber-500/20' : (isCursor ? 'text-cyan-400 font-bold' : '')}
+                >
+                  {lineNum}
+                </div>
+              );
+            })}
           </div>
 
           {/* Textarea Code Input */}

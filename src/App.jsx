@@ -128,6 +128,7 @@ export default function App({ initialRoute }) {
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
   const [isExportValidationOpen, setIsExportValidationOpen] = useState(false);
   const [exportValidationResult, setExportValidationResult] = useState(null);
+  const [editorTarget, setEditorTarget] = useState({ file: null, line: null });
 
   // Stable refs for hooks
   const filesRef = useRef(files);
@@ -268,6 +269,10 @@ export default function App({ initialRoute }) {
     const rawMsg = typeof err === 'string' ? err : (err?.message || 'Rendering error');
     executeAutoFix(rawMsg, true);
   }, [executeAutoFix]);
+
+  const handleSandboxMountSuccess = useCallback(() => {
+    lastHandledErrorRef.current = '';
+  }, []);
 
   // — Sandbox postMessage listener (Studio only, never runs on dashboard or behind user's back) —
   useSandboxMessages({
@@ -638,7 +643,11 @@ export default function App({ initialRoute }) {
                 promptText={messages.slice().reverse().find(m => m.role === 'user')?.content || ''}
                 onSandboxError={handleSandboxError}
                 onAutoFix={handleManualAutoFix}
-                onViewCode={() => setActiveTab('code')}
+                onViewCode={(file, line) => {
+                  setEditorTarget({ file: file || null, line: line || null });
+                  setActiveTab('code');
+                }}
+                onMountSuccess={handleSandboxMountSuccess}
               />
             ) : (
               <CodeInspector
@@ -650,6 +659,8 @@ export default function App({ initialRoute }) {
                 canRedo={canRedo}
                 onUndo={undo}
                 onRedo={redo}
+                targetFile={editorTarget.file}
+                targetLine={editorTarget.line}
               />
             )}
           </div>

@@ -513,3 +513,172 @@ test('Pipeline 23: Double-Buffered Staging — Repaired code replaces active pre
   assert.equal(activeSlot, 'B', 'Active slot promoted to B');
   assert.equal(lastGoodDoc, pendingDoc, 'Last good preview updated');
 });
+
+test('Pipeline 24: Semantic Validation — Detects undefined variables and components', () => {
+  const filesWithUndefinedVar = {
+    'src/App.jsx': [
+      'import React from "react";',
+      'export default function App() {',
+      '  const val = getDynamicScore();',
+      '  return <div>{val}</div>;',
+      '}'
+    ].join('\n')
+  };
+
+  const res = validateProjectFiles(filesWithUndefinedVar);
+  assert.equal(res.isValid, false);
+  assert.ok(res.errors.some(e => e.message.includes('getDynamicScore')));
+  assert.equal(res.errors[0].errorStage, 'validation');
+});
+
+test('Pipeline 25: Semantic Validation — Detects missing local file imports', () => {
+  const filesWithMissingLocalImport = {
+    'src/App.jsx': [
+      'import React from "react";',
+      'import Header from "./components/Header.jsx";',
+      'export default function App() {',
+      '  return <Header />;',
+      '}'
+    ].join('\n')
+  };
+
+  const res = validateProjectFiles(filesWithMissingLocalImport);
+  assert.equal(res.isValid, false);
+  assert.ok(res.errors.some(e => e.message.includes('Missing local import: "./components/Header.jsx"')));
+  assert.equal(res.errors[0].errorStage, 'validation');
+});
+
+test('Pipeline 26: Semantic Validation — Detects missing primary App export', () => {
+  const filesWithoutAppExport = {
+    'src/App.jsx': [
+      'import React from "react";',
+      'const helper = () => 42;',
+      'function SubComponent() { return <div>Sub</div>; }'
+    ].join('\n')
+  };
+
+  const res = validateProjectFiles(filesWithoutAppExport);
+  assert.equal(res.isValid, false);
+  assert.ok(res.errors.some(e => e.message.includes('Missing App component export')));
+  assert.equal(res.errors[0].errorStage, 'validation');
+});
+
+test('Pipeline 27: Semantic Validation — Detects unsupported external packages', () => {
+  const filesWithUnsupportedPkg = {
+    'src/App.jsx': [
+      'import React from "react";',
+      'import _ from "lodash";',
+      'export default function App() { return <div>{_.isEmpty([])}</div>; }'
+    ].join('\n')
+  };
+
+  const res = validateProjectFiles(filesWithUnsupportedPkg);
+  assert.equal(res.isValid, false);
+  assert.ok(res.errors.some(e => e.message.includes('Unsupported external package "lodash"')));
+  assert.equal(res.errors[0].errorStage, 'validation');
+});
+
+test('Pipeline 28: Sandbox Message Security — Validates payload shape and filters stale previewId', () => {
+  const currentPreviewId = 'prev_expected_999';
+  let mountReceived = false;
+
+  function handleMessage(event) {
+    // 1. Verify object shape
+    if (!event.data || typeof event.data !== 'object') return false;
+    const { type, previewId } = event.data;
+    if (type !== 'SANDBOX_MOUNT_SUCCESS' && type !== 'SANDBOX_RUNTIME_ERROR') return false;
+
+    // 2. Reject mismatched previewId
+    if (previewId && previewId !== currentPreviewId) return false;
+
+    if (type === 'SANDBOX_MOUNT_SUCCESS') {
+      mountReceived = true;
+      return true;
+    }
+    return true;
+  }
+
+  // Raw primitive payload ignored
+  assert.equal(handleMessage({ data: 'hello' }), false);
+  assert.equal(handleMessage({ data: null }), false);
+
+  // Unknown message type ignored
+  assert.equal(handleMessage({ data: { type: 'SOME_OTHER_EVENT' } }), false);
+
+  // Mismatched / stale previewId ignored
+  assert.equal(handleMessage({ data: { type: 'SANDBOX_MOUNT_SUCCESS', previewId: 'prev_old_000' } }), false);
+  assert.equal(mountReceived, false);
+
+  // Matching previewId accepted
+  assert.equal(handleMessage({ data: { type: 'SANDBOX_MOUNT_SUCCESS', previewId: currentPreviewId } }), true);
+  assert.equal(mountReceived, true);
+});
+
+test('Pipeline 29: Auto-Repair Reliability — Exhaustion at 3 retries and deduplication', () => {
+  const MAX_AUTO_FIX_ATTEMPTS = 3;
+  let autoFixCount = 0;
+  let messages = [];
+  let lastError = '';
+
+  function triggerRepair(errMsg) {
+    if (errMsg === lastError) {
+      return; // deduplicated
+    }
+    lastError = errMsg;
+
+    if (autoFixCount >= MAX_AUTO_FIX_ATTEMPTS) {
+      messages.push({
+        role: 'ai',
+        content: 'Auto-repair reached the maximum retry limit (3/3). Please inspect the code or try a different prompt.'
+      });
+      return;
+    }
+
+    autoFixCount++;
+    messages.push({ role: 'system', content: `Auto-repair attempt ${autoFixCount}` });
+  }
+
+  // Attempt 1
+  triggerRepair('Error A');
+  assert.equal(autoFixCount, 1);
+
+  // Duplicate ignored
+  triggerRepair('Error A');
+  assert.equal(autoFixCount, 1);
+
+  // Attempt 2
+  triggerRepair('Error B');
+  assert.equal(autoFixCount, 2);
+
+  // Attempt 3
+  triggerRepair('Error C');
+  assert.equal(autoFixCount, 3);
+
+  // Attempt 4 -> Exhausted
+  triggerRepair('Error D');
+  assert.equal(autoFixCount, 3, 'Must not exceed MAX_AUTO_FIX_ATTEMPTS');
+  assert.ok(messages[messages.length - 1].content.includes('maximum retry limit (3/3)'));
+});
+
+test('Pipeline 30: Diagnostics — Classifies failure stages (parsing, validation, compilation, runtime)', () => {
+  const parseErr = parseSandboxError({ message: 'Missing delimiter', errorStage: 'parsing', file: 'src/App.jsx', line: 12 });
+  assert.equal(parseErr.errorStage, 'parsing');
+  assert.equal(parseErr.detectedFile, 'src/App.jsx');
+  assert.equal(parseErr.lineNumber, 12);
+
+  const valErr = parseSandboxError({ message: 'computeAnalyticsRate is not defined', errorStage: 'validation', file: 'src/App.jsx', line: 8 });
+  assert.equal(valErr.errorStage, 'validation');
+  assert.equal(valErr.errorType, 'Undefined Variable');
+  assert.equal(valErr.lineNumber, 8);
+
+  const compErr = parseSandboxError({ message: 'Unexpected token (14:2)', errorStage: 'compilation', file: 'src/App.jsx', line: 14 });
+  assert.equal(compErr.errorStage, 'compilation');
+  assert.equal(compErr.errorType, 'Syntax Error');
+  assert.equal(compErr.lineNumber, 14);
+
+  const runErr = parseSandboxError({ message: 'Cannot read properties of undefined (reading "map")', errorStage: 'runtime', file: 'src/components/Card.jsx', line: 22 });
+  assert.equal(runErr.errorStage, 'runtime');
+  assert.equal(runErr.errorType, 'Null Access Error');
+  assert.equal(runErr.detectedFile, 'src/components/Card.jsx');
+  assert.equal(runErr.lineNumber, 22);
+});

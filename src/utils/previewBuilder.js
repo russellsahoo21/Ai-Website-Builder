@@ -7,6 +7,7 @@
 export function buildPreviewDoc(files, options = {}) {
   if (!files || Object.keys(files).length === 0) return '';
   const shouldReportErrors = options.reportErrors !== false && !options.isThumbnail;
+  const previewId = options.previewId || '';
 
   const isHtmlDoc = (code) => {
     if (!code || typeof code !== 'string') return false;
@@ -427,9 +428,12 @@ export function buildPreviewDoc(files, options = {}) {
         try {
           window.parent.postMessage({
             type: 'SANDBOX_RUNTIME_ERROR',
+            previewId: '${previewId}',
+            errorStage: 'runtime',
             error: {
               message: error?.message || String(error),
-              stack: error?.stack || ''
+              stack: error?.stack || '',
+              duringMount: true
             }
           }, '*');
         } catch (e) {}
@@ -472,7 +476,10 @@ export function buildPreviewDoc(files, options = {}) {
         React.createElement(ErrorBoundary, null, React.createElement(targetComponent))
       );
       try {
-        window.parent.postMessage({ type: 'SANDBOX_MOUNT_SUCCESS' }, '*');
+        window.parent.postMessage({
+          type: 'SANDBOX_MOUNT_SUCCESS',
+          previewId: '${previewId}'
+        }, '*');
       } catch (e) {}
       setTimeout(() => {
         if (window.lucide) window.lucide.createIcons();
@@ -482,6 +489,8 @@ export function buildPreviewDoc(files, options = {}) {
       try {
         window.parent.postMessage({
           type: 'SANDBOX_RUNTIME_ERROR',
+          previewId: '${previewId}',
+          errorStage: 'runtime',
           error: { message: 'App component not found in src/App.jsx. Ensure primary component is named "App".' }
         }, '*');
       } catch (e) {}
@@ -496,6 +505,8 @@ export function buildPreviewDoc(files, options = {}) {
       try {
         window.parent.postMessage({
           type: 'SANDBOX_RUNTIME_ERROR',
+          previewId: '${previewId}',
+          errorStage: 'runtime',
           error: { message: e.message || 'Script error', stack: e.error ? e.error.stack : '' }
         }, '*');
       } catch (err) {}
@@ -505,6 +516,8 @@ export function buildPreviewDoc(files, options = {}) {
       try {
         window.parent.postMessage({
           type: 'SANDBOX_RUNTIME_ERROR',
+          previewId: '${previewId}',
+          errorStage: 'runtime',
           error: { message: 'Promise rejection: ' + (e.reason ? (e.reason.message || String(e.reason)) : 'Unknown') }
         }, '*');
       } catch (err) {}
@@ -536,6 +549,8 @@ export function buildPreviewDoc(files, options = {}) {
         try {
           window.parent.postMessage({
             type: 'SANDBOX_RUNTIME_ERROR',
+            previewId: '${previewId}',
+            errorStage: 'compilation',
             error: { message: err.message, stack: err.stack || '' }
           }, '*');
         } catch (e) {}
@@ -615,10 +630,27 @@ export function buildPreviewDoc(files, options = {}) {
       try {
         window.parent.postMessage({
           type: 'SANDBOX_RUNTIME_ERROR',
+          previewId: '${previewId}',
+          errorStage: 'runtime',
           error: { message: e.message || 'Runtime error in script', stack: e.error ? e.error.stack : '' }
         }, '*');
       } catch (err) {}
     });
+
+    function notifyVanillaMount() {
+      try {
+        window.parent.postMessage({
+          type: 'SANDBOX_MOUNT_SUCCESS',
+          previewId: '${previewId}'
+        }, '*');
+      } catch (err) {}
+    }
+
+    if (document.readyState === 'complete') {
+      notifyVanillaMount();
+    } else {
+      window.addEventListener('load', notifyVanillaMount);
+    }
   </script>`;
 
   if (html.includes('</body>')) {

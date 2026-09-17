@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import SatisfyingLoader from './SatisfyingLoader';
 import SandboxIframe from '../sandbox/SandboxIframe';
 import { buildPreviewDoc } from '../utils/previewBuilder';
@@ -15,7 +15,8 @@ export default function PreviewPanel({
   onCancel, 
   onSandboxError,
   onAutoFix,
-  onViewCode 
+  onViewCode,
+  onMountSuccess
 }) {
   const [activeError, setActiveError] = useState(null);
 
@@ -75,6 +76,7 @@ export default function PreviewPanel({
             files={files}
             keyTrigger={keyTrigger}
             onError={handleSandboxError}
+            onMountSuccess={onMountSuccess}
           />
 
           {/* Floating Actionable Diagnostic Banner */}
