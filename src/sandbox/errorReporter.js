@@ -86,30 +86,52 @@ export function isRecoverable(rawError = '') {
 /**
  * Builds a targeted fix prompt for the AI based on error type.
  */
-export function buildFixPrompt(rawError, currentCode) {
+export function buildFixPrompt(rawError, currentCode = '', partialCode = '') {
   rawError = rawError || '';
   currentCode = currentCode || '';
+  partialCode = partialCode || '';
 
   const fileMatch = rawError.match(/([\w/-]+\.(?:jsx|js|tsx|ts))/i);
   const targetFile = fileMatch ? fileMatch[1] : 'src/App.jsx';
 
+  // 1. Truncation / cut off / incomplete generation
+  if (/incomplete|truncated|cut off|finish_reason|length/i.test(rawError)) {
+    let prompt = `The previous output for ${targetFile} was cut off or truncated before completion.\n`;
+    if (partialCode && partialCode.trim()) {
+      prompt += `\nHere is the partial code that was generated before truncation:\n\`\`\`jsx\n${partialCode.trim().slice(-2000)}\n\`\`\`\n`;
+    } else if (currentCode && currentCode.trim()) {
+      prompt += `\nExisting working code:\n\`\`\`jsx\n${currentCode.trim()}\n\`\`\`\n`;
+    }
+    prompt += `\nPlease output the COMPLETE, fully functional, unabbreviated code for ${targetFile}.\n` +
+      `Ensure all JSX tags and blocks are closed.\n` +
+      `Wrap the entire file inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`;
+    return prompt;
+  }
+
+  // 2. Syntax errors
   if (/SyntaxError|Unexpected token/i.test(rawError)) {
-    return (
-      `Fix this syntax error in ${targetFile}:\n"${rawError}"\n\n` +
-      `Check for unclosed JSX tags, missing braces, invalid expressions, or malformed imports.\n` +
-      `Return the complete corrected ${targetFile} inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`
-    );
+    let prompt = `Fix this syntax error in ${targetFile}:\n"${rawError}"\n\n` +
+      `Check for unclosed JSX tags, missing braces, invalid expressions, or malformed imports.\n`;
+    if (currentCode && currentCode.trim()) {
+      prompt += `\nCurrent code:\n\`\`\`jsx\n${currentCode.trim()}\n\`\`\`\n\n`;
+    }
+    prompt += `Return the complete corrected ${targetFile} inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`;
+    return prompt;
   }
 
+  // 3. Identifier already declared
   if (/Identifier.*already.*been.*declared/i.test(rawError)) {
-    return (
-      'Fix this error: ' + rawError + '\n\n' +
+    let prompt = 'Fix this error: ' + rawError + '\n\n' +
       'Rename any component that uses a reserved word (Filter, Search, Save, Tag, Star, Calendar, Settings, Info, Home, Lock, User, Database, Server) ' +
-      'to a compound domain-specific name (e.g. FilterPanel, SearchBar). ' +
-      `Return the complete corrected ${targetFile} inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`
-    );
+      'to a compound domain-specific name (e.g. FilterPanel, SearchBar).\n';
+    if (currentCode && currentCode.trim()) {
+      prompt += `\nCurrent code:\n\`\`\`jsx\n${currentCode.trim()}\n\`\`\`\n\n`;
+    }
+    prompt += `Return the complete corrected ${targetFile} inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`;
+    return prompt;
   }
 
+  // 4. Raw HTML -> React conversion
   if (/<!DOCTYPE|<html/i.test(rawError) || currentCode.trim().toLowerCase().startsWith('<!doctype')) {
     return (
       'The previous output was a raw HTML document. ' +
@@ -119,12 +141,15 @@ export function buildFixPrompt(rawError, currentCode) {
     );
   }
 
-  return (
-    `Fix this runtime error in ${targetFile}: "${rawError}"\n\n` +
+  // 5. General runtime / undefined variable / sandbox error
+  let prompt = `Fix this runtime error in ${targetFile}: "${rawError}"\n\n` +
     'Ensure all context hooks have safe defaults, no component names shadow globals, ' +
-    'and all referenced variables are declared. ' +
-    `Return the complete corrected ${targetFile} inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`
-  );
+    'and all referenced variables are declared.\n';
+  if (currentCode && currentCode.trim()) {
+    prompt += `\nCurrent code:\n\`\`\`jsx\n${currentCode.trim()}\n\`\`\`\n\n`;
+  }
+  prompt += `Return the complete corrected ${targetFile} inside <<<FILE:${targetFile}>>> and <<<END_FILE>>>.`;
+  return prompt;
 }
 
 /**

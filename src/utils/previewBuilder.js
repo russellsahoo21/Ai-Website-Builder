@@ -355,10 +355,14 @@ export function buildPreviewDoc(files, options = {}) {
       }
       static getDerivedStateFromError(error) {
         hasMountError = true;
+        window.__hasMountError = true;
+        window.__mountSuccessEmitted = true;
         return { hasError: true, error };
       }
       componentDidCatch(error, errorInfo) {
         hasMountError = true;
+        window.__hasMountError = true;
+        window.__mountSuccessEmitted = true;
         console.error('[Sandbox ErrorBoundary]', error.message);
         try {
           window.parent.postMessage({
@@ -426,7 +430,7 @@ export function buildPreviewDoc(files, options = {}) {
         }
       }
       setTimeout(() => {
-        if (!hasMountError && !window.__mountSuccessEmitted) {
+        if (!hasMountError && !window.__hasMountError && !window.__mountSuccessEmitted) {
           window.__mountSuccessEmitted = true;
           try {
             console.log('[IFRAME EMIT MOUNT_SUCCESS]', '${previewId}');
@@ -437,7 +441,7 @@ export function buildPreviewDoc(files, options = {}) {
           } catch (e) {}
         }
         if (window.lucide) window.lucide.createIcons();
-      }, 60);
+      }, 150);
     } else {
       // No App component found — notify parent silently for BTS repair
       try {
@@ -567,13 +571,16 @@ export function buildPreviewDoc(files, options = {}) {
     ${shouldReportErrors ? `
     // Global error capture — postMessage to parent
     window.addEventListener('error', function(e) {
-      hasMountError = true;
+      window.__hasMountError = true;
+      window.__mountSuccessEmitted = true;
       try {
+        var msg = (e.error && e.error.message) ? e.error.message : (e.message || 'Script error');
+        var stack = e.error ? e.error.stack : '';
         window.parent.postMessage({
           type: 'SANDBOX_RUNTIME_ERROR',
           previewId: '${previewId}',
           errorStage: 'runtime',
-          error: { message: e.message || 'Script error', stack: e.error ? e.error.stack : '' }
+          error: { message: msg, stack: stack, duringMount: true }
         }, '*');
       } catch (err) {}
     });

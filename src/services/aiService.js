@@ -85,6 +85,41 @@ export const AVAILABLE_MODELS = [
 ];
 
 /**
+ * Extracts delta, usage, finish_reason and completion status from one SSE data line.
+ *
+ * @param {string} line - Raw SSE line
+ * @returns {{ isDone: boolean, delta: string, usage: Object|null, finishReason: string|null, error?: Error }}
+ */
+export function extractStreamMeta(line) {
+  const trimmed = (line || '').trim();
+  if (!trimmed) {
+    return { isDone: false, delta: '', usage: null, finishReason: null };
+  }
+  if (trimmed === 'data: [DONE]') {
+    return { isDone: true, delta: '', usage: null, finishReason: null };
+  }
+  if (!trimmed.startsWith('data: ')) {
+    return { isDone: false, delta: '', usage: null, finishReason: null };
+  }
+  const jsonStr = trimmed.slice(6).trim();
+  if (!jsonStr) {
+    return { isDone: false, delta: '', usage: null, finishReason: null };
+  }
+  try {
+    const data = JSON.parse(jsonStr);
+    const choice = data.choices?.[0];
+    return {
+      isDone: false,
+      delta: choice?.delta?.content || '',
+      usage: data.usage || null,
+      finishReason: choice?.finish_reason || null,
+    };
+  } catch (err) {
+    return { isDone: false, delta: '', usage: null, finishReason: null, error: err };
+  }
+}
+
+/**
  * Streams website generation via the Next.js Edge/Server proxy endpoint.
  *
  * @param {Object} params
@@ -122,48 +157,42 @@ export async function streamGenerateWebsite({
   const resetStallWatchdog = () => {
     if (stallTimeout) clearTimeout(stallTimeout);
     stallTimeout = setTimeout(() => {
-      internalController.abort(new Error('Stream stalled — no tokens received for 60 seconds.'));
+      console.warn('[AetherCraft] Stream stalled for 60s without chunks, aborting.');
+      internalController.abort(new Error('Generation stalled (no tokens received for 60s).'));
     }, 60000);
   };
 
   try {
-    // 1. Call Next.js Server-Side Proxy
-    const proxyUrl = typeof window !== 'undefined'
-      ? '/api/generate'
-      : 'http://localhost:3000/api/generate';
+    // 1. Dispatch Generation Request through Next.js Server Route
+    let response = await fetch('/api/generate', {
+      method: 'POST',
+      signal: effectiveSignal,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        messages,
+        model,
+        customApiKey: apiKey || undefined,
+        currentFiles,
+        userId: userId || undefined,
+      }),
+    });
 
-    let response;
-    try {
-      response = await fetch(proxyUrl, {
-        method: 'POST',
-        signal: effectiveSignal,
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          currentFiles,
-          customApiKey: apiKey || undefined,
-          userId: userId || undefined,
-        }),
-      });
-    } catch (netErr) {
-      // Fallback: If proxy route is unreachable in static build or dev disconnect, try direct fallback
-      if (apiKey) {
-        console.warn('[AetherCraft AI] Proxy fetch failed, attempting direct BYOK fallback...');
-        response = await fetchDirectUpstream(apiKey, model, messages, currentFiles, effectiveSignal);
-      } else {
-        throw netErr;
-      }
+    if (connTimeout) clearTimeout(connTimeout);
+
+    // Fallback: If local API route is unreachable or returns 404/502 in pure SPA mode, try direct upstream
+    if (!response.ok && (response.status === 404 || response.status === 502) && apiKey) {
+      console.warn('[AetherCraft API Proxy Failed] Falling back to direct client-side upstream...');
+      response = await fetchDirectUpstream(apiKey, model, messages, currentFiles, effectiveSignal);
     }
 
-    clearTimeout(connTimeout);
-
     if (!response.ok) {
-      const errJson = await response.json().catch(() => ({}));
-      const errMsg = errJson.error || `Proxy error (HTTP ${response.status})`;
-      throw new Error(errMsg);
+      let errData = {};
+      try {
+        errData = await response.json();
+      } catch (e) {}
+      throw new Error(errData.error || `Generation failed with status ${response.status}`);
     }
 
     // Read token optimization headers
@@ -182,36 +211,36 @@ export async function streamGenerateWebsite({
     let exactProviderUsage = null;
     let sseBuffer = '';
     let isStreamDone = false;
+    let lastFinishReason = null;
+    let isTruncated = false;
 
     resetStallWatchdog();
 
     const parseLine = (rawLine) => {
-      const trimmed = rawLine.trim();
-      if (!trimmed) return;
-      if (trimmed === 'data: [DONE]') {
+      const meta = extractStreamMeta(rawLine);
+      if (meta.isDone) {
         isStreamDone = true;
         return;
       }
-      if (!trimmed.startsWith('data: ')) return;
-      const jsonStr = trimmed.slice(6).trim();
-      if (!jsonStr) return;
-      try {
-        const data = JSON.parse(jsonStr);
-        if (data.usage) {
-          exactProviderUsage = data.usage;
+      if (meta.usage) {
+        exactProviderUsage = meta.usage;
+      }
+      if (meta.finishReason) {
+        lastFinishReason = meta.finishReason;
+        if (meta.finishReason === 'length') {
+          isTruncated = true;
         }
-        const delta = data.choices?.[0]?.delta?.content || '';
-        if (delta) {
-          fullText += delta;
-          if (onChunk) onChunk(delta, fullText);
-          const parsed = parseGeneratedFiles(fullText, currentFiles);
-          if (Object.keys(parsed.files).length > 0 && onFileParsed) {
-            onFileParsed(parsed);
-          }
+      }
+      if (meta.error) {
+        console.warn('[AetherCraft SSE Parse Warning]', meta.error.message, 'Raw line:', rawLine);
+      }
+      if (meta.delta) {
+        fullText += meta.delta;
+        if (onChunk) onChunk(meta.delta, fullText);
+        const parsed = parseGeneratedFiles(fullText, currentFiles);
+        if (Object.keys(parsed.files).length > 0 && onFileParsed) {
+          onFileParsed(parsed);
         }
-      } catch (parseErr) {
-        // Line was complete but malformed JSON from provider
-        console.warn('[AetherCraft SSE Parse Warning]', parseErr.message, 'Raw line:', jsonStr);
       }
     };
 
@@ -265,8 +294,14 @@ export async function streamGenerateWebsite({
     }
 
     const finalParsed = parseGeneratedFiles(fullText, currentFiles);
-    if (onComplete) onComplete(fullText, { ...finalParsed, totalConsumed });
-    return { fullText, totalConsumed, ...finalParsed };
+    const completionMeta = {
+      ...finalParsed,
+      totalConsumed,
+      finishReason: lastFinishReason,
+      isTruncated: Boolean(isTruncated || lastFinishReason === 'length'),
+    };
+    if (onComplete) onComplete(fullText, completionMeta);
+    return { fullText, ...completionMeta };
   } catch (error) {
     if (connTimeout) clearTimeout(connTimeout);
     if (stallTimeout) clearTimeout(stallTimeout);
@@ -298,6 +333,7 @@ async function fetchDirectUpstream(apiKey, model, messages, currentFiles, signal
       model: model === 'google/gemini-3.6-flash' ? 'openrouter/free' : model,
       messages: [{ role: 'user', content: messages[messages.length - 1]?.content || 'Synthesize app' }],
       stream: true,
+      max_tokens: 8192,
       stream_options: { include_usage: true },
       temperature: 0.7,
     }),

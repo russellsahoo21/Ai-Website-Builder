@@ -76,10 +76,11 @@ function classifyContent(content) {
  */
 export function parseGeneratedFiles(text, existingFiles = {}) {
   if (!text || typeof text !== 'string') {
-    return { files: {}, errors: [], warnings: [], needsReactConversion: false, isComplete: false };
+    return { files: {}, rawFiles: {}, errors: [], warnings: [], needsReactConversion: false, isComplete: false };
   }
 
   const raw = {};
+  const rawFiles = {};
   const errors = [];
   const warnings = [];
 
@@ -94,6 +95,7 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
 
     if (!isClosed) {
       errors.push({ file: name, reason: `Truncated patch block: missing <<<END_PATCH>>> delimiter for ${name}.` });
+      rawFiles[name] = patchMatch[2].trim();
       // Unclosed PATCH/DIFF blocks must not be applied
       if (existingFiles[name]) {
         raw[name] = existingFiles[name];
@@ -139,6 +141,8 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
       const endMarkerIndex = fileSegment.indexOf('<<<END_FILE>>>');
       if (endMarkerIndex === -1) {
         // Missing <<<END_FILE>>> delimiter — file block was cut off / truncated
+        const partialContent = fileSegment.trim();
+        rawFiles[name] = partialContent;
         errors.push({
           file: name,
           reason: `Missing <<<END_FILE>>> delimiter for ${name}. Model output was truncated or incomplete.`
@@ -151,6 +155,7 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
       }
 
       const content = fileSegment.slice(0, endMarkerIndex).trim();
+      rawFiles[name] = content;
       if (content.length < MIN_CONTENT_LENGTH) {
         warnings.push({
           file: name,
@@ -194,6 +199,7 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
 
       if (!isClosed) {
         errors.push({ file: name, reason: `Unclosed markdown code block for ${name}.` });
+        rawFiles[name] = content;
         // Unclosed Markdown code blocks must not be added to raw files
         if (existingFiles[name]) {
           raw[name] = existingFiles[name];
@@ -202,6 +208,7 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
       }
       if (name && content.length >= MIN_CONTENT_LENGTH) {
         raw[name] = content;
+        rawFiles[name] = content;
       }
     }
   }
@@ -215,6 +222,7 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
       const content = text.slice(start).trim();
       if (content.length >= MIN_CONTENT_LENGTH) {
         raw['src/App.jsx'] = content;
+        rawFiles['src/App.jsx'] = content;
       }
     }
   }
@@ -230,6 +238,7 @@ export function parseGeneratedFiles(text, existingFiles = {}) {
 
   return {
     ...resolved,
+    rawFiles,
     errors,
     warnings,
     isComplete,

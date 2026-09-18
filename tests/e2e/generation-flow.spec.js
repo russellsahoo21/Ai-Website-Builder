@@ -84,10 +84,15 @@ test.describe('Real Browser AI Generation Flow (Prompt -> Runtime Error -> Auto-
 
     // 3. Open Studio view
     await page.goto('/studio');
+    await page.waitForLoadState('domcontentloaded');
 
     // Wait for Studio interface to initialize
     const promptInput = page.getByPlaceholder(/Type instructions or describe your changes|Describe what you want to build/i).first();
-    await expect(promptInput).toBeVisible({ timeout: 15000 });
+    await expect(promptInput).toBeVisible({ timeout: 30000 });
+
+    // Wait for initial preview component to mount
+    const initialFrame = page.frameLocator('iframe.z-10');
+    await expect(initialFrame.locator('#root > *')).toBeVisible({ timeout: 20000 });
 
     // 4. Input generation prompt
     await promptInput.fill('Build a simple counter application with interactive buttons');

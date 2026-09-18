@@ -246,6 +246,10 @@ export async function POST(req) {
     const isDirectXkiro = (isByok && customApiKey.startsWith('sk-xt-')) || (model.startsWith('xkiro/') && Boolean(xkiroEnvKey));
     const isDirectNvidia = isByok && customApiKey.startsWith('nvapi-');
 
+    // Explicit output budget — without this, some OpenAI-compatible gateways
+    // apply a tiny default (~200 tokens) and the stream ends with finish_reason="length".
+    const MAX_OUTPUT_TOKENS = Math.max(1024, parseInt(process.env.MAX_OUTPUT_TOKENS || '8192', 10));
+
     let upstreamUrl = 'https://openrouter.ai/api/v1/chat/completions';
     let upstreamKey = '';
     let upstreamBody = {
@@ -253,6 +257,7 @@ export async function POST(req) {
       messages: formattedMessages,
       stream: true,
       temperature: 0.7,
+      max_tokens: MAX_OUTPUT_TOKENS,
       stream_options: { include_usage: true },
     };
 

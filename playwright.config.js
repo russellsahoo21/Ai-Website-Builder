@@ -6,7 +6,8 @@ export default defineConfig({
   expect: {
     timeout: 8000
   },
-  fullyParallel: true,
+  fullyParallel: false,
+  workers: 2,
   reporter: 'list',
   use: {
     baseURL: process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:3001',
@@ -20,9 +21,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm.cmd run dev',
+    command: 'npm.cmd start',
     url: 'http://localhost:3001',
-    reuseExistingServer: true,
+    reuseExistingServer: false,
     timeout: 120000,
   },
 });

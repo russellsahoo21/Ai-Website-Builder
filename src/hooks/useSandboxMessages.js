@@ -96,15 +96,16 @@ export function useSandboxMessages({
           return;
         }
 
-        // 4. NEVER trigger auto-fix while code is actively streaming or compiling (only when idle)
-        if (isGeneratingRef.current) {
+        const rawMsg = typeof rawError === 'string' ? rawError : (rawError.message || 'Runtime error');
+        const isSandboxFailure = Boolean(rawError?.duringMount || event.data.errorStage === 'runtime');
+
+        // 4. NEVER trigger auto-fix for general errors while code is streaming; mount failures are scheduled
+        if (isGeneratingRef.current && !isSandboxFailure) {
           return;
         }
 
-        const rawMsg = typeof rawError === 'string' ? rawError : (rawError.message || 'Runtime error');
-
-        // 2. Filter out non-fatal/benign errors
-        const isBenign = BENIGN_ERROR_PATTERNS.some((re) => re.test(rawMsg));
+        // 2. Filter out non-fatal/benign errors (unless explicitly flagged from sandbox runtime or during mount)
+        const isBenign = !isSandboxFailure && BENIGN_ERROR_PATTERNS.some((re) => re.test(rawMsg));
         if (isBenign) {
           return;
         }

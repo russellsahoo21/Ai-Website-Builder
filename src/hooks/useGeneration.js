@@ -64,14 +64,14 @@ export function useGeneration({
   const executeAutoFixRef = useRef(null);
   const repairTimerRef = useRef(null);
 
-  const scheduleRepair = useCallback((repairPrompt) => {
+  const scheduleRepair = useCallback((repairPrompt, partialCode = '') => {
     if (repairTimerRef.current) {
       clearTimeout(repairTimerRef.current);
       repairTimerRef.current = null;
     }
     repairTimerRef.current = setTimeout(() => {
       repairTimerRef.current = null;
-      executeAutoFixRef.current?.(repairPrompt, false);
+      executeAutoFixRef.current?.(repairPrompt, false, partialCode);
     }, 450);
   }, []);
 
@@ -119,7 +119,7 @@ export function useGeneration({
    * BTS auto-fix. Silently repairs runtime errors without showing error text to user.
    * Shows a subtle status note in chat, then replaces it with success on completion.
    */
-  const executeAutoFix = useCallback(async (rawErrorMsg, isManual = false) => {
+  const executeAutoFix = useCallback(async (rawErrorMsg, isManual = false, partialCode = '') => {
     const now = Date.now();
     const isProviderWithDefault = selectedModelRef.current?.includes('gemini') || selectedModelRef.current?.includes('nvidia') || selectedModelRef.current?.includes('qwen') || selectedModelRef.current?.includes('groq') || selectedModelRef.current?.includes('gpt-oss');
     const hasKey = Boolean(apiKeyRef.current || isProviderWithDefault || import.meta.env.VITE_OPENROUTER_API_KEY || import.meta.env.VITE_GROQ_API_KEY);
@@ -153,7 +153,7 @@ export function useGeneration({
     const currentFiles = filesRef.current;
     const currentMessages = messagesRef.current;
     const currentAppCode = currentFiles['src/App.jsx'] || currentFiles['App.jsx'] || '';
-    const fixPrompt = buildFixPrompt(rawErrorMsg, currentAppCode);
+    const fixPrompt = buildFixPrompt(rawErrorMsg, currentAppCode, partialCode);
 
     abortControllerRef.current?.abort();
     abortControllerRef.current = new AbortController();
@@ -199,7 +199,8 @@ export function useGeneration({
         },
         onComplete: (fullText, finalResult) => {
           // 1. Check parser completion & errors before merging or validating
-          const hasParserErrors = !finalResult?.isComplete || (finalResult?.errors && finalResult.errors.length > 0);
+          const isTruncated = Boolean(finalResult?.isTruncated || finalResult?.finishReason === 'length');
+          const hasParserErrors = !finalResult?.isComplete || (finalResult?.errors && finalResult.errors.length > 0) || isTruncated;
           if (hasParserErrors) {
             console.warn('[Auto-Fix Parser Incomplete]', finalResult?.errors);
             if (finalResult?.totalConsumed > 0) {
@@ -209,9 +210,13 @@ export function useGeneration({
             isGeneratingRef.current = false;
             setIsGenerating(false);
 
-            const firstErr = finalResult?.errors?.[0] || { file: 'src/App.jsx', reason: 'Output incomplete' };
+            const firstErr = finalResult?.errors?.[0] || {
+              file: 'src/App.jsx',
+              reason: isTruncated ? 'Generation reached token limit (finish_reason: length)' : 'Output incomplete'
+            };
+            const partial = finalResult?.rawFiles?.[firstErr.file] || fullText || '';
             if (autoFixCountRef.current < MAX_AUTO_FIX_ATTEMPTS) {
-              scheduleRepair(`Model output was incomplete for ${firstErr.file}: ${firstErr.reason}. Please provide complete code inside <<<FILE:${firstErr.file}>>> ... <<<END_FILE>>>.`);
+              scheduleRepair(`Model output was incomplete for ${firstErr.file}: ${firstErr.reason}. Please provide complete code inside <<<FILE:${firstErr.file}>>> ... <<<END_FILE>>>.`, partial);
             }
             return;
           }
@@ -355,14 +360,18 @@ export function useGeneration({
         },
         onComplete: (fullText, finalResult) => {
           // 1. Check parser completion & errors BEFORE merging or validating files
-          const hasParserErrors = !finalResult?.isComplete || (finalResult?.errors && finalResult.errors.length > 0);
+          const isTruncated = Boolean(finalResult?.isTruncated || finalResult?.finishReason === 'length');
+          const hasParserErrors = !finalResult?.isComplete || (finalResult?.errors && finalResult.errors.length > 0) || isTruncated;
           if (hasParserErrors) {
             console.warn('[Generation Parser Incomplete] Preserving previous project:', finalResult?.errors);
             if (finalResult?.totalConsumed > 0) {
               rollbackTokenUsage(finalResult.totalConsumed, userIdRef.current);
             }
 
-            const firstErr = finalResult?.errors?.[0] || { file: 'src/App.jsx', reason: 'Output was truncated or incomplete' };
+            const firstErr = finalResult?.errors?.[0] || { 
+              file: 'src/App.jsx', 
+              reason: isTruncated ? 'Generation reached token limit (finish_reason: length)' : 'Output was truncated or incomplete' 
+            };
             const friendlyErr = `Generation was cut off or incomplete for ${firstErr.file}. Preserving your working code while auto-repairing in background…`;
             setMessages(prev => [...prev, { role: 'ai', content: friendlyErr }]);
 
@@ -382,8 +391,9 @@ export function useGeneration({
             isGeneratingRef.current = false;
             setIsGenerating(false);
 
+            const partial = finalResult?.rawFiles?.[firstErr.file] || fullText || '';
             if (autoFixCountRef.current < MAX_AUTO_FIX_ATTEMPTS) {
-              scheduleRepair(`Model output was incomplete for ${firstErr.file}: ${firstErr.reason}. Please provide complete code inside <<<FILE:${firstErr.file}>>> ... <<<END_FILE>>>.`);
+              scheduleRepair(`Model output was incomplete for ${firstErr.file}: ${firstErr.reason}. Please provide complete code inside <<<FILE:${firstErr.file}>>> ... <<<END_FILE>>>.`, partial);
             }
             return;
           }
@@ -401,6 +411,8 @@ export function useGeneration({
             validationErrors = validation.errors || [];
 
             if (isValidProject) {
+              isGeneratingRef.current = false;
+              setIsGenerating(false);
               setFiles(merged);
             } else {
               // Pre-save validation failed — preserve previous working project!
@@ -552,6 +564,8 @@ export function useGeneration({
     handleSendMessage,
     handleCancelGeneration,
     executeAutoFix,
+    scheduleRepair,
+    isGeneratingRef,
     abortControllerRef,
     autoFixCountRef,
     telemetry,

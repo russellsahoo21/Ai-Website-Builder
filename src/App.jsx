@@ -76,7 +76,13 @@ function getAppRoute() {
 
 export default function App({ initialRoute }) {
   const { isSignedIn: clerkSignedIn, isLoaded, user: clerkUser } = useUser();
-  const guestSession = typeof localStorage !== 'undefined' ? getSession() : null;
+  let guestSession = null;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = localStorage.getItem('aethercraft_auth_session');
+      if (raw) guestSession = JSON.parse(raw);
+    }
+  } catch (_) {}
   const isSignedIn = clerkSignedIn || Boolean(guestSession);
   const user = clerkUser || guestSession;
   const clerk = useClerk();
@@ -239,7 +245,7 @@ export default function App({ initialRoute }) {
   }, [files, messages, activeProjectId]);
 
   // — Generation hook —
-  const { handleSendMessage, handleCancelGeneration, executeAutoFix, autoFixCountRef, telemetry } = useGeneration({
+  const { handleSendMessage, handleCancelGeneration, executeAutoFix, scheduleRepair, isGeneratingRef, autoFixCountRef, telemetry } = useGeneration({
     apiKey,
     selectedModel,
     userId: user?.id,
@@ -260,10 +266,6 @@ export default function App({ initialRoute }) {
   }, [files]);
 
   const handleSandboxError = useCallback((err) => {
-    // Unify validation and repair:
-    // If SandboxIframe or PreviewPanel detects an error, trigger auto-repair when idle
-    if (isGenerating) return;
-
     const rawMsg = typeof err === 'string' ? err : (err?.message || 'Syntax error in project files');
 
     // Prevent duplicate repair requests for the same unchanged error
@@ -273,8 +275,12 @@ export default function App({ initialRoute }) {
     lastHandledErrorRef.current = rawMsg;
 
     console.warn('[Sandbox Unified Error -> Auto-Repair]', rawMsg);
-    executeAutoFix(rawMsg, false);
-  }, [isGenerating, executeAutoFix]);
+    if (isGeneratingRef?.current) {
+      scheduleRepair(rawMsg);
+    } else {
+      executeAutoFix(rawMsg, false);
+    }
+  }, [scheduleRepair, executeAutoFix, isGeneratingRef]);
 
   const handleManualAutoFix = useCallback((err) => {
     lastHandledErrorRef.current = '';
